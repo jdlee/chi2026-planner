@@ -14,7 +14,7 @@ import anthropic
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright
 
-load_dotenv()
+load_dotenv(Path(__file__).parent / ".env", override=True)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -281,7 +281,7 @@ Rules:
 """
 
         response = client.messages.create(
-            model="claude-sonnet-4-6-20250514",
+            model="claude-sonnet-4-20250514",
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -306,6 +306,13 @@ Rules:
 
         logger.info(f"Classified papers {i+1}-{i+len(batch)} of {len(papers)}")
 
+        # Save progress every 50 batches
+        if len(classified) % 500 < batch_size:
+            _save_progress(classified, seed_themes, emergent_suggestions, max_emergent)
+
+    # Final save
+    _save_progress(classified, seed_themes, emergent_suggestions, max_emergent)
+
     # Deduplicate and rank emergent themes
     emergent_counts = Counter(emergent_suggestions)
     top_emergent = [
@@ -319,6 +326,19 @@ Rules:
     return classified, all_themes
 
 
+def _save_progress(classified, seed_themes, emergent_suggestions, max_emergent):
+    """Save intermediate classification progress."""
+    emergent_counts = Counter(emergent_suggestions)
+    top_emergent = [
+        {"name": theme, "description": f"Emergent theme (appeared {count} times)", "emergent": True}
+        for theme, count in emergent_counts.most_common(max_emergent)
+        if count >= 2
+    ]
+    all_themes = seed_themes + top_emergent
+    save_classified(classified, all_themes)
+    logger.info(f"Progress saved: {len(classified)} papers classified")
+
+
 def save_classified(papers: list[dict], themes: list[dict]) -> None:
     """Save classified data."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -329,7 +349,7 @@ def save_classified(papers: list[dict], themes: list[dict]) -> None:
 
 
 def run_classify_only():
-    """Classify papers from existing raw data."""
+    """Classify papers from existing raw data. Supports resume."""
     raw_path = DATA_DIR / "chi2026_raw.json"
     if not raw_path.exists():
         logger.error(f"No raw data found at {raw_path}. Run scraper first.")
@@ -337,8 +357,26 @@ def run_classify_only():
 
     papers = json.loads(raw_path.read_text())
     config = load_themes()
-    classified, themes = classify_papers(papers, config)
-    save_classified(classified, themes)
+
+    # Resume: check if partial classification exists
+    classified_path = DATA_DIR / "chi2026_classified.json"
+    already_done = 0
+    prior_classified = []
+    if classified_path.exists():
+        prior_classified = json.loads(classified_path.read_text())
+        already_done = len(prior_classified)
+        if already_done >= len(papers):
+            logger.info("All papers already classified. Nothing to do.")
+            return
+        if already_done > 0:
+            logger.info(f"Resuming: {already_done} papers already classified, {len(papers) - already_done} remaining")
+
+    remaining = papers[already_done:]
+    new_classified, themes = classify_papers(remaining, config)
+
+    # Merge prior + new
+    all_classified = prior_classified + new_classified
+    save_classified(all_classified, themes)
 
 
 if __name__ == "__main__":
