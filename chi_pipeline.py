@@ -11,7 +11,10 @@ from collections import Counter
 
 import yaml
 import anthropic
+from dotenv import load_dotenv
 from playwright.async_api import async_playwright
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
