@@ -3,12 +3,14 @@
 import json
 import asyncio
 import logging
+import argparse
 from pathlib import Path
 from datetime import datetime
 from collections import Counter
 
 import yaml
 import anthropic
+from playwright.async_api import async_playwright
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -16,6 +18,104 @@ logger = logging.getLogger(__name__)
 ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
 CONFIG_DIR = ROOT / "config"
+
+
+async def scrape_chi_program(url: str = "https://programs.sigchi.org/chi/2026") -> list[dict]:
+    """Scrape CHI 2026 program using Playwright.
+
+    NOTE: The CSS selectors below are initial guesses based on typical
+    conference program site patterns. Run this once, inspect the output,
+    and update selectors as needed. The site may also require clicking
+    through navigation (days, tracks) to load all papers.
+    """
+    papers = []
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+
+        logger.info(f"Navigating to {url}")
+        await page.goto(url, wait_until="networkidle", timeout=60000)
+
+        # Wait for content to render
+        await page.wait_for_timeout(3000)
+
+        # --- SELECTOR DISCOVERY MODE ---
+        discovery_file = DATA_DIR / "page_dump.html"
+        if not (DATA_DIR / "chi2026_raw.json").exists():
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            html = await page.content()
+            discovery_file.write_text(html)
+            logger.info(f"Page HTML dumped to {discovery_file} for selector discovery")
+
+        # --- PAPER EXTRACTION ---
+        # These selectors are PLACEHOLDERS — update after inspecting page_dump.html
+        session_elements = await page.query_selector_all("[class*='session'], [class*='Session']")
+        logger.info(f"Found {len(session_elements)} session elements")
+
+        for session_el in session_elements:
+            session_title = await session_el.query_selector(
+                "[class*='title'], [class*='name'], h2, h3"
+            )
+            session_name = await session_title.inner_text() if session_title else "Unknown Session"
+
+            time_el = await session_el.query_selector("[class*='time'], [class*='date'], time")
+            time_text = await time_el.inner_text() if time_el else ""
+
+            location_el = await session_el.query_selector("[class*='room'], [class*='location']")
+            location_text = await location_el.inner_text() if location_el else ""
+
+            paper_elements = await session_el.query_selector_all(
+                "[class*='paper'], [class*='item'], [class*='entry'], [class*='submission']"
+            )
+
+            for paper_el in paper_elements:
+                title_el = await paper_el.query_selector("[class*='title'], h3, h4, a")
+                title = await title_el.inner_text() if title_el else "Untitled"
+
+                authors_el = await paper_el.query_selector("[class*='author']")
+                authors = await authors_el.inner_text() if authors_el else ""
+
+                abstract_el = await paper_el.query_selector("[class*='abstract'], [class*='description']")
+                abstract = await abstract_el.inner_text() if abstract_el else ""
+
+                paper_time_el = await paper_el.query_selector("[class*='time'], time")
+                paper_time = await paper_time_el.inner_text() if paper_time_el else time_text
+
+                papers.append({
+                    "title": title.strip(),
+                    "authors": authors.strip(),
+                    "abstract": abstract.strip(),
+                    "session": session_name.strip(),
+                    "time": paper_time.strip(),
+                    "location": location_text.strip(),
+                    "date": "",
+                    "start_time": "",
+                    "end_time": "",
+                })
+
+        await browser.close()
+
+    logger.info(f"Scraped {len(papers)} papers")
+    return papers
+
+
+def save_raw(papers: list[dict]) -> None:
+    """Save raw scraped data."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    out = DATA_DIR / "chi2026_raw.json"
+    out.write_text(json.dumps(papers, indent=2))
+    logger.info(f"Saved {len(papers)} papers to {out}")
+
+
+async def run_full_pipeline():
+    """Run scrape + classify."""
+    papers = await scrape_chi_program()
+    save_raw(papers)
+
+    config = load_themes()
+    classified, themes = classify_papers(papers, config)
+    save_classified(classified, themes)
 
 
 def load_themes() -> dict:
@@ -133,4 +233,19 @@ def run_classify_only():
 
 
 if __name__ == "__main__":
-    run_classify_only()
+    parser = argparse.ArgumentParser(description="CHI 2026 Paper Pipeline")
+    parser.add_argument(
+        "mode",
+        choices=["scrape", "classify", "full"],
+        default="full",
+        nargs="?",
+        help="Pipeline mode: scrape only, classify only, or full pipeline",
+    )
+    args = parser.parse_args()
+
+    if args.mode == "scrape":
+        asyncio.run(scrape_chi_program())
+    elif args.mode == "classify":
+        run_classify_only()
+    else:
+        asyncio.run(run_full_pipeline())
