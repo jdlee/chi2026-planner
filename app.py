@@ -169,76 +169,79 @@ def main():
         )
         st.altair_chart(scatter, use_container_width=True)
 
-    # --- Sortable Topic Table ---
-    st.subheader("Papers")
+    # --- Cluster filter ---
+    cluster_labels = sorted(df["cluster_label"].dropna().unique()) if "cluster_label" in df.columns else []
+    if cluster_labels:
+        selected_clusters = st.multiselect("Filter by cluster", cluster_labels, default=[])
+        if selected_clusters:
+            df = df[df["cluster_label"].isin(selected_clusters)]
+
+    # --- Papers Table ---
+    st.subheader(f"Papers ({len(df)})")
 
     sort_col = st.selectbox(
         "Sort by",
         ["start_time", "cluster_label"] + topic_names,
         index=0,
     )
-    ascending = sort_col == "start_time"
-    df_sorted = df.sort_values(sort_col, ascending=ascending)
+    ascending = sort_col in ("start_time", "cluster_label")
+    df_sorted = df.sort_values(sort_col, ascending=ascending, na_position="last")
 
-    for _, row in df_sorted.iterrows():
-        idx = int(row["_index"])
-        is_selected = idx in st.session_state.selected
+    # Build display table with key columns
+    display_cols = ["title", "authors", "session", "session_type", "date", "time", "location", "cluster_label"]
+    if "award" in df_sorted.columns:
+        display_cols.insert(1, "award")
+    if "abstract" in df_sorted.columns:
+        display_cols.append("abstract")
+    # Add topic score columns (rounded for display)
+    for t in topic_names:
+        if t in df_sorted.columns:
+            display_cols.append(t)
 
-        has_conflict = False
-        if is_selected:
-            for other_idx in st.session_state.selected:
-                if other_idx != idx and other_idx < len(papers):
-                    other = papers[other_idx]
-                    if (
-                        row.get("date") == other.get("date")
-                        and row.get("start_time")
-                        and other.get("end_time")
-                        and row["start_time"] < other["end_time"]
-                        and other.get("start_time", "") < row.get("end_time", "99:99")
-                    ):
-                        has_conflict = True
-                        break
+    display_df = df_sorted[["_index"] + [c for c in display_cols if c in df_sorted.columns]].copy()
+    # Round topic scores
+    for t in topic_names:
+        if t in display_df.columns:
+            display_df[t] = display_df[t].round(2)
 
-        conflict_icon = " ⚠️" if has_conflict else ""
-        cluster_tag = f" [{row.get('cluster_label', '')}]" if row.get("cluster_label") else ""
+    # Selection via checkboxes in the table
+    display_df.insert(0, "Select", display_df["_index"].apply(lambda x: x in st.session_state.selected))
 
-        col1, col2 = st.columns([0.05, 0.95])
+    edited = st.data_editor(
+        display_df.drop(columns=["_index"]),
+        column_config={
+            "Select": st.column_config.CheckboxColumn("Sel", width="small"),
+            "title": st.column_config.TextColumn("Title", width="large"),
+            "authors": st.column_config.TextColumn("Authors", width="medium"),
+            "abstract": st.column_config.TextColumn("Abstract", width="large"),
+            "session": st.column_config.TextColumn("Session", width="medium"),
+            "session_type": st.column_config.TextColumn("Type", width="small"),
+            "date": st.column_config.TextColumn("Date", width="small"),
+            "time": st.column_config.TextColumn("Time", width="small"),
+            "location": st.column_config.TextColumn("Room", width="small"),
+            "cluster_label": st.column_config.TextColumn("Cluster", width="medium"),
+            "award": st.column_config.TextColumn("Award", width="small"),
+            **{
+                t: st.column_config.ProgressColumn(t, min_value=0, max_value=1, width="small")
+                for t in topic_names if t in display_df.columns
+            },
+        },
+        hide_index=True,
+        use_container_width=True,
+        key="paper_table",
+    )
 
-        with col1:
-            checked = st.checkbox(
-                "sel",
-                value=is_selected,
-                key=f"cb_{idx}",
-                label_visibility="collapsed",
-            )
-            if checked and idx not in st.session_state.selected:
-                st.session_state.selected.add(idx)
-                st.rerun()
-            elif not checked and idx in st.session_state.selected:
-                st.session_state.selected.discard(idx)
-                st.rerun()
-
-        with col2:
-            with st.expander(
-                f"{conflict_icon} **{row['title']}** — {row.get('time', '')} @ {row.get('location', '')}{cluster_tag}"
-            ):
-                st.write(f"**Authors:** {row.get('authors', '')}")
-                st.write(f"**Session:** {row.get('session', '')} ({row.get('session_type', '')})")
-                if row.get("abstract"):
-                    st.write(f"**Abstract:** {row['abstract']}")
-
-                scores = {
-                    t: row[t] for t in topic_names
-                    if t in row.index and row[t] >= min_relevance
-                }
-                if scores:
-                    st.write(
-                        "**Topics:** "
-                        + ", ".join(
-                            f"`{t}` ({s:.2f})"
-                            for t, s in sorted(scores.items(), key=lambda x: -x[1])
-                        )
-                    )
+    # Sync selections back from edited table
+    if edited is not None:
+        new_selected = set()
+        for i, selected in enumerate(edited["Select"]):
+            if selected:
+                idx = int(display_df.iloc[i]["_index"])
+                new_selected.add(idx)
+        if new_selected != st.session_state.selected:
+            st.session_state.selected = new_selected
+            save_selection()
+            st.rerun()
 
 
 if __name__ == "__main__":
