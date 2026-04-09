@@ -449,7 +449,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CHI 2026 Paper Pipeline")
     parser.add_argument(
         "mode",
-        choices=["scrape", "abstracts", "classify", "full"],
+        choices=["scrape", "abstracts", "classify", "cluster", "full"],
         default="full",
         nargs="?",
         help="Pipeline mode: scrape, abstracts, classify, or full pipeline",
@@ -469,5 +469,8 @@ if __name__ == "__main__":
             save_raw(papers)
     elif args.mode == "classify":
         run_classify_only()
+    elif args.mode == "cluster":
+        from cluster import main as cluster_main
+        cluster_main()
     else:
         asyncio.run(run_full_pipeline())
