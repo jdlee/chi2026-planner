@@ -1,9 +1,12 @@
 """Export selected papers as Markdown agenda and .ics calendar."""
 
 from datetime import datetime, timedelta
-from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from icalendar import Calendar, Event
+
+# CHI 2026 is in Barcelona, Spain
+VENUE_TZ = ZoneInfo("Europe/Madrid")
 
 
 def generate_markdown(
@@ -141,7 +144,7 @@ def _parse_datetime(paper: dict, year: int) -> datetime | None:
     if not date_str or not time_str:
         return None
     try:
-        return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+        return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M").replace(tzinfo=VENUE_TZ)
     except ValueError:
         return None
 
@@ -153,6 +156,6 @@ def _parse_end_datetime(paper: dict, year: int) -> datetime | None:
     if not date_str or not time_str:
         return None
     try:
-        return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+        return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M").replace(tzinfo=VENUE_TZ)
     except ValueError:
         return None
