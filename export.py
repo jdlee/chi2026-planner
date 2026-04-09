@@ -24,7 +24,7 @@ def generate_markdown(
     for theme in themes:
         count = sum(
             1 for p in selected_papers
-            if p.get("theme_scores", {}).get(theme["name"], 0) >= theme_threshold
+            if p.get("theme_scores", p.get("topic_scores", {})).get(theme["name"], 0) >= theme_threshold
         )
         if count > 0:
             lines.append(f"- **{theme['name']}** — {count} paper{'s' if count != 1 else ''}")
@@ -127,8 +127,8 @@ def _times_overlap(p1: dict, p2: dict) -> bool:
 
 
 def _format_theme_tags(paper: dict, themes: list[dict], threshold: float) -> str:
-    """Format theme tags for a paper."""
-    scores = paper.get("theme_scores", {})
+    """Format theme/topic tags for a paper."""
+    scores = paper.get("theme_scores", paper.get("topic_scores", {}))
     matching = [
         f"`{name}` ({score:.1f})"
         for name, score in sorted(scores.items(), key=lambda x: -x[1])
