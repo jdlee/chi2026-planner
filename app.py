@@ -17,20 +17,22 @@ st.set_page_config(page_title="CHI 2026 Planner", layout="wide")
 
 @st.cache_data
 def load_data():
-    """Load classified papers and themes."""
-    papers_path = DATA_DIR / "chi2026_classified.json"
-    themes_path = DATA_DIR / "themes.json"
+    """Load clustered papers and topics."""
+    clustered_path = DATA_DIR / "chi2026_clustered.json"
+    topics_path = DATA_DIR / "topics.json"
 
-    if not papers_path.exists():
+    if not clustered_path.exists():
         st.error(
-            "No data found. Run the pipeline first:\n"
-            "```\npython chi_pipeline.py\n```"
+            "No clustered data found. Run the clustering pipeline first:\n"
+            "```\npython chi_pipeline.py cluster\n```"
         )
         st.stop()
 
-    papers = json.loads(papers_path.read_text())
-    themes = json.loads(themes_path.read_text()) if themes_path.exists() else []
-    return papers, themes
+    papers = json.loads(clustered_path.read_text())
+    topics_data = json.loads(topics_path.read_text()) if topics_path.exists() else {}
+    topic_names = topics_data.get("topic_names", [])
+    topics = topics_data.get("topics", {})
+    return papers, topic_names, topics
 
 
 def init_selection():
@@ -50,12 +52,28 @@ def save_selection():
     path.write_text(json.dumps(sorted(st.session_state.selected)))
 
 
+def build_dataframe(papers, topic_names):
+    """Build a DataFrame from papers with topic score columns."""
+    df = pd.DataFrame(papers)
+    df["_index"] = range(len(papers))
+
+    if "topic_scores" in df.columns:
+        scores_df = pd.json_normalize(df["topic_scores"])
+        for col in topic_names:
+            if col not in scores_df.columns:
+                scores_df[col] = 0.0
+        df = pd.concat([df.drop(columns=["topic_scores"]), scores_df[topic_names]], axis=1)
+
+    return df
+
+
 def main():
     st.title("CHI 2026 Paper Viewer & Agenda Planner")
 
-    papers, themes = load_data()
+    papers, topic_names, topics = load_data()
     init_selection()
-    theme_names = [t["name"] for t in themes]
+
+    themes = [{"name": t} for t in topic_names]
 
     # --- Sidebar: Filters & Export ---
     with st.sidebar:
@@ -63,18 +81,20 @@ def main():
 
         keyword = st.text_input("Search titles & abstracts")
 
-        selected_themes = st.multiselect(
-            "Filter by themes", theme_names, default=[]
-        )
-        min_relevance = st.slider(
-            "Min theme relevance", 0.0, 1.0, 0.3, 0.05
-        )
+        selected_topics = st.multiselect("Filter by topics", topic_names, default=[])
+        min_relevance = st.slider("Min topic relevance", 0.0, 1.0, 0.2, 0.05)
 
         dates = sorted(set(p.get("date", "") for p in papers if p.get("date")))
         if dates:
             selected_dates = st.multiselect("Filter by date", dates, default=dates)
         else:
             selected_dates = []
+
+        session_types = sorted(set(p.get("session_type", "") for p in papers if p.get("session_type")))
+        if session_types:
+            selected_types = st.multiselect("Filter by type", session_types, default=session_types)
+        else:
+            selected_types = []
 
         st.divider()
         st.header("Selection")
@@ -109,15 +129,8 @@ def main():
             disabled=len(selected_papers) == 0,
         )
 
-    # --- Apply filters ---
-    df = pd.DataFrame(papers)
-    df["_index"] = range(len(papers))
-
-    theme_score_df = pd.json_normalize(df["theme_scores"])
-    for col in theme_names:
-        if col not in theme_score_df.columns:
-            theme_score_df[col] = 0.0
-    df = pd.concat([df.drop(columns=["theme_scores"]), theme_score_df[theme_names]], axis=1)
+    # --- Build and filter DataFrame ---
+    df = build_dataframe(papers, topic_names)
 
     if keyword:
         mask = df["title"].str.contains(keyword, case=False, na=False) | df[
@@ -128,47 +141,46 @@ def main():
     if selected_dates:
         df = df[df["date"].isin(selected_dates)]
 
-    if selected_themes:
-        theme_mask = df[selected_themes].max(axis=1) >= min_relevance
-        df = df[theme_mask]
+    if selected_types:
+        df = df[df["session_type"].isin(selected_types)]
 
-    # --- Main view: Paper x Theme matrix ---
-    st.subheader(f"Papers ({len(df)} shown)")
+    if selected_topics:
+        topic_mask = df[selected_topics].max(axis=1) >= min_relevance
+        df = df[topic_mask]
+
+    # --- UMAP Scatter Plot ---
+    st.subheader(f"Paper Landscape ({len(df)} papers)")
+
+    if "umap_x" in df.columns and len(df) > 0:
+        scatter = (
+            alt.Chart(df)
+            .mark_circle(size=40, opacity=0.7)
+            .encode(
+                x=alt.X("umap_x:Q", axis=alt.Axis(title="UMAP 1", labels=False, ticks=False)),
+                y=alt.Y("umap_y:Q", axis=alt.Axis(title="UMAP 2", labels=False, ticks=False)),
+                color=alt.Color(
+                    "cluster_label:N",
+                    legend=alt.Legend(title="Topic Cluster", columns=2),
+                ),
+                tooltip=["title", "cluster_label", "session", "date", "time", "location"],
+            )
+            .properties(height=450)
+            .interactive()
+        )
+        st.altair_chart(scatter, use_container_width=True)
+
+    # --- Sortable Topic Table ---
+    st.subheader("Papers")
 
     sort_col = st.selectbox(
         "Sort by",
-        ["start_time"] + theme_names,
+        ["start_time", "cluster_label"] + topic_names,
         index=0,
     )
-    df = df.sort_values(sort_col, ascending=sort_col == "start_time")
+    ascending = sort_col == "start_time"
+    df_sorted = df.sort_values(sort_col, ascending=ascending)
 
-    # Heatmap visualization
-    if theme_names and len(df) > 0:
-        heatmap_data = df.melt(
-            id_vars=["_index", "title"],
-            value_vars=theme_names,
-            var_name="Theme",
-            value_name="Relevance",
-        )
-
-        heatmap = (
-            alt.Chart(heatmap_data)
-            .mark_rect()
-            .encode(
-                x=alt.X("Theme:N", sort=theme_names, axis=alt.Axis(labelAngle=-45)),
-                y=alt.Y("title:N", sort=list(df["title"]), axis=alt.Axis(labelLimit=300)),
-                color=alt.Color(
-                    "Relevance:Q",
-                    scale=alt.Scale(scheme="blues", domain=[0, 1]),
-                ),
-                tooltip=["title", "Theme", alt.Tooltip("Relevance:Q", format=".2f")],
-            )
-            .properties(height=max(len(df) * 25, 200))
-        )
-        st.altair_chart(heatmap, use_container_width=True)
-
-    # Paper list with selection
-    for _, row in df.iterrows():
+    for _, row in df_sorted.iterrows():
         idx = int(row["_index"])
         is_selected = idx in st.session_state.selected
 
@@ -178,8 +190,8 @@ def main():
                 if other_idx != idx and other_idx < len(papers):
                     other = papers[other_idx]
                     if (
-                        row["date"] == other.get("date")
-                        and row["start_time"]
+                        row.get("date") == other.get("date")
+                        and row.get("start_time")
                         and other.get("end_time")
                         and row["start_time"] < other["end_time"]
                         and other.get("start_time", "") < row.get("end_time", "99:99")
@@ -188,6 +200,8 @@ def main():
                         break
 
         conflict_icon = " ⚠️" if has_conflict else ""
+        cluster_tag = f" [{row.get('cluster_label', '')}]" if row.get("cluster_label") else ""
+
         col1, col2 = st.columns([0.05, 0.95])
 
         with col1:
@@ -205,16 +219,26 @@ def main():
                 st.rerun()
 
         with col2:
-            with st.expander(f"{conflict_icon} **{row['title']}** — {row['time']} @ {row['location']}"):
-                st.write(f"**Authors:** {row['authors']}")
-                st.write(f"**Session:** {row['session']}")
-                st.write(f"**Abstract:** {row['abstract']}")
+            with st.expander(
+                f"{conflict_icon} **{row['title']}** — {row.get('time', '')} @ {row.get('location', '')}{cluster_tag}"
+            ):
+                st.write(f"**Authors:** {row.get('authors', '')}")
+                st.write(f"**Session:** {row.get('session', '')} ({row.get('session_type', '')})")
+                if row.get("abstract"):
+                    st.write(f"**Abstract:** {row['abstract']}")
 
-                scores = {t: row[t] for t in theme_names if row[t] >= min_relevance}
+                scores = {
+                    t: row[t] for t in topic_names
+                    if t in row.index and row[t] >= min_relevance
+                }
                 if scores:
-                    st.write("**Themes:** " + ", ".join(
-                        f"`{t}` ({s:.2f})" for t, s in sorted(scores.items(), key=lambda x: -x[1])
-                    ))
+                    st.write(
+                        "**Topics:** "
+                        + ", ".join(
+                            f"`{t}` ({s:.2f})"
+                            for t, s in sorted(scores.items(), key=lambda x: -x[1])
+                        )
+                    )
 
 
 if __name__ == "__main__":
