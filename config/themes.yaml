@@ -1,0 +1,19 @@
+# Seed themes for CHI 2026 paper classification
+# Edit this list to match your research interests
+seed_themes:
+  - name: "Trust in AI"
+    description: "Calibrated trust, overtrust/undertrust, transparency, explainability"
+  - name: "LLM Interaction"
+    description: "ChatGPT, copilots, prompt engineering, conversational AI, generative AI UX"
+  - name: "Accessibility"
+    description: "Assistive technology, inclusive design, disability, universal design"
+  - name: "Human-Robot Interaction"
+    description: "Social robots, collaborative robots, teleoperation, embodied agents"
+  - name: "Cognitive Engineering"
+    description: "Situation awareness, workload, decision making, human error, automation"
+
+# How many emergent themes to discover from abstracts
+max_emergent_themes: 10
+
+# Minimum relevance score (0-1) to tag a paper with a theme
+relevance_threshold: 0.3
