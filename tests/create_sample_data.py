@@ -1,0 +1,174 @@
+"""Generate sample CHI 2026 data for testing the app without scraping."""
+
+import json
+from pathlib import Path
+
+DATA_DIR = Path(__file__).parent.parent / "data"
+
+SAMPLE_PAPERS = [
+    {
+        "title": "Understanding Trust Calibration in AI-Assisted Decision Making",
+        "authors": "Smith, A.; Jones, B.; Chen, W.",
+        "abstract": "We study how users calibrate trust when AI systems provide recommendations with varying accuracy. Our experiment with 200 participants reveals that explanation style significantly impacts trust calibration. Confidence indicators were the most effective.",
+        "session": "Trust and AI",
+        "time": "9:00-10:15",
+        "location": "Room 101A",
+        "date": "2026-04-27",
+        "start_time": "09:00",
+        "end_time": "10:15",
+        "theme_scores": {
+            "Trust in AI": 0.95,
+            "LLM Interaction": 0.2,
+            "Accessibility": 0.05,
+            "Human-Robot Interaction": 0.1,
+            "Cognitive Engineering": 0.6,
+        },
+    },
+    {
+        "title": "Conversational Repair Strategies in LLM-Powered Chatbots",
+        "authors": "Lee, C.; Park, D.; Kim, E.",
+        "abstract": "We analyze how users recover from conversational breakdowns when interacting with large language model chatbots. Through a diary study with 50 participants over 4 weeks, we identify five repair strategies and their effectiveness.",
+        "session": "LLM Experiences",
+        "time": "9:00-10:15",
+        "location": "Room 205",
+        "date": "2026-04-27",
+        "start_time": "09:00",
+        "end_time": "10:15",
+        "theme_scores": {
+            "Trust in AI": 0.3,
+            "LLM Interaction": 0.92,
+            "Accessibility": 0.1,
+            "Human-Robot Interaction": 0.05,
+            "Cognitive Engineering": 0.25,
+        },
+    },
+    {
+        "title": "Accessible Data Visualization for Screen Reader Users",
+        "authors": "Garcia, F.; Thompson, R.",
+        "abstract": "We present a toolkit for making interactive data visualizations accessible to screen reader users. Our approach uses sonification and structured navigation to convey chart patterns. Evaluation with 15 blind users showed significant improvements.",
+        "session": "Accessibility Innovations",
+        "time": "10:30-11:45",
+        "location": "Room 101A",
+        "date": "2026-04-27",
+        "start_time": "10:30",
+        "end_time": "11:45",
+        "theme_scores": {
+            "Trust in AI": 0.05,
+            "LLM Interaction": 0.1,
+            "Accessibility": 0.97,
+            "Human-Robot Interaction": 0.0,
+            "Cognitive Engineering": 0.15,
+        },
+    },
+    {
+        "title": "Social Robot Companions for Elderly Care: A 6-Month Deployment",
+        "authors": "Tanaka, H.; Mueller, S.; Patel, N.",
+        "abstract": "We report on a 6-month deployment of social robot companions in three elder care facilities. Our mixed-methods study reveals that long-term interaction patterns differ significantly from lab-based findings.",
+        "session": "Robots in the Wild",
+        "time": "14:00-15:15",
+        "location": "Room 310",
+        "date": "2026-04-27",
+        "start_time": "14:00",
+        "end_time": "15:15",
+        "theme_scores": {
+            "Trust in AI": 0.4,
+            "LLM Interaction": 0.05,
+            "Accessibility": 0.35,
+            "Human-Robot Interaction": 0.95,
+            "Cognitive Engineering": 0.2,
+        },
+    },
+    {
+        "title": "Prompt Engineering as Cognitive Work: A Task Analysis",
+        "authors": "Williams, J.; Brown, K.; Davis, L.",
+        "abstract": "We apply cognitive task analysis methods to understand prompt engineering as a form of cognitive work. Interviews with 30 AI practitioners reveal complex mental models and strategies that inform the design of better prompting interfaces.",
+        "session": "AI Work Practices",
+        "time": "14:00-15:15",
+        "location": "Room 205",
+        "date": "2026-04-27",
+        "start_time": "14:00",
+        "end_time": "15:15",
+        "theme_scores": {
+            "Trust in AI": 0.3,
+            "LLM Interaction": 0.88,
+            "Accessibility": 0.05,
+            "Human-Robot Interaction": 0.0,
+            "Cognitive Engineering": 0.82,
+        },
+    },
+    {
+        "title": "Designing for Appropriate Reliance on AI in Emergency Dispatch",
+        "authors": "Andersson, M.; Zhao, Q.",
+        "abstract": "Emergency dispatchers increasingly use AI-assisted triage systems. We conducted a field study at three dispatch centers examining how dispatchers develop appropriate reliance strategies. Over/under-reliance patterns were strongly predicted by experience level.",
+        "session": "AI in Critical Systems",
+        "time": "9:00-10:15",
+        "location": "Room 310",
+        "date": "2026-04-28",
+        "start_time": "09:00",
+        "end_time": "10:15",
+        "theme_scores": {
+            "Trust in AI": 0.91,
+            "LLM Interaction": 0.15,
+            "Accessibility": 0.1,
+            "Human-Robot Interaction": 0.05,
+            "Cognitive Engineering": 0.88,
+        },
+    },
+    {
+        "title": "Voice Interfaces for Neurodivergent Users: Co-Design Insights",
+        "authors": "Rivera, A.; Okonkwo, C.; Johansson, P.",
+        "abstract": "We co-designed voice interaction paradigms with neurodivergent users including people with ADHD, autism, and dyslexia. Our findings challenge assumptions in current voice UI guidelines and propose alternative interaction patterns.",
+        "session": "Inclusive Voice",
+        "time": "10:30-11:45",
+        "location": "Room 101A",
+        "date": "2026-04-28",
+        "start_time": "10:30",
+        "end_time": "11:45",
+        "theme_scores": {
+            "Trust in AI": 0.1,
+            "LLM Interaction": 0.35,
+            "Accessibility": 0.93,
+            "Human-Robot Interaction": 0.15,
+            "Cognitive Engineering": 0.3,
+        },
+    },
+    {
+        "title": "LLM-Assisted Code Review: Impact on Developer Cognition",
+        "authors": "Zhang, Y.; Fischer, G.; Nakamura, T.",
+        "abstract": "We study the cognitive impact of LLM-assisted code review tools on software developers. A controlled experiment with 60 developers shows that AI suggestions change review depth and attention allocation patterns.",
+        "session": "AI Developer Tools",
+        "time": "14:00-15:15",
+        "location": "Room 205",
+        "date": "2026-04-28",
+        "start_time": "14:00",
+        "end_time": "15:15",
+        "theme_scores": {
+            "Trust in AI": 0.55,
+            "LLM Interaction": 0.85,
+            "Accessibility": 0.0,
+            "Human-Robot Interaction": 0.0,
+            "Cognitive Engineering": 0.7,
+        },
+    },
+]
+
+SAMPLE_THEMES = [
+    {"name": "Trust in AI", "description": "Calibrated trust, overtrust/undertrust, transparency, explainability"},
+    {"name": "LLM Interaction", "description": "ChatGPT, copilots, prompt engineering, conversational AI, generative AI UX"},
+    {"name": "Accessibility", "description": "Assistive technology, inclusive design, disability, universal design"},
+    {"name": "Human-Robot Interaction", "description": "Social robots, collaborative robots, teleoperation, embodied agents"},
+    {"name": "Cognitive Engineering", "description": "Situation awareness, workload, decision making, human error, automation"},
+    {"name": "Co-Design", "description": "Emergent theme (appeared 3 times)", "emergent": True},
+    {"name": "Field Deployment", "description": "Emergent theme (appeared 2 times)", "emergent": True},
+]
+
+
+def create_sample_data():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    (DATA_DIR / "chi2026_classified.json").write_text(json.dumps(SAMPLE_PAPERS, indent=2))
+    (DATA_DIR / "themes.json").write_text(json.dumps(SAMPLE_THEMES, indent=2))
+    print(f"Sample data written to {DATA_DIR}")
+
+
+if __name__ == "__main__":
+    create_sample_data()
