@@ -146,11 +146,18 @@ async def _scrape_day_page(page, date_str: str) -> list[dict]:
                         if href:
                             content_url = href
 
+                    # Check for award badges (Best Paper, Honorable Mention)
+                    award = ""
+                    award_el = await item.query_selector("award-label")
+                    if award_el:
+                        award = (await award_el.inner_text()).strip()
+
                     if title:
                         papers.append({
                             "title": title,
                             "authors": authors,
                             "abstract": "",
+                            "award": award,
                             "content_url": content_url,
                             "session": session_name,
                             "session_type": session_type,
