@@ -44,6 +44,7 @@ def fit_tfidf(docs: list[str], max_features: int = 5000) -> tuple:
 
 def run_umap(tfidf_matrix, n_neighbors: int = 30, min_dist: float = 0.1) -> np.ndarray:
     """Reduce TF-IDF to 2D with UMAP."""
+    n_neighbors = min(n_neighbors, tfidf_matrix.shape[0] - 1)
     reducer = umap.UMAP(
         n_components=2,
         n_neighbors=n_neighbors,
@@ -56,16 +57,23 @@ def run_umap(tfidf_matrix, n_neighbors: int = 30, min_dist: float = 0.1) -> np.n
     return coords
 
 
-def run_clustering(tfidf_matrix, min_cluster_size: int = 15) -> np.ndarray:
+def run_clustering(tfidf_matrix, min_cluster_size: int = None) -> np.ndarray:
     """Cluster papers with HDBSCAN in TF-IDF space."""
+    n_papers = tfidf_matrix.shape[0]
+    if min_cluster_size is None:
+        # Scale with dataset: min 5 for small sets, 15 for large
+        min_cluster_size = max(5, min(15, n_papers // 20))
+    n_neighbors = min(30, n_papers - 1)
+    n_components = min(20, n_papers - 2)
+
     clusterer = hdbscan.HDBSCAN(
         min_cluster_size=min_cluster_size,
         metric="euclidean",
         cluster_selection_method="eom",
     )
     reducer = umap.UMAP(
-        n_components=20,
-        n_neighbors=30,
+        n_components=n_components,
+        n_neighbors=n_neighbors,
         min_dist=0.0,
         metric="cosine",
         random_state=42,
