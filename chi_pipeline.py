@@ -136,11 +136,22 @@ async def _scrape_day_page(page, date_str: str) -> list[dict]:
                     authors = (await authors_el.inner_text()).strip() if authors_el else ""
                     authors = re.sub(r"\s*,\s*", ", ", authors).strip(", ")
 
+                    # Get content URL for abstract fetching
+                    link_el = await item.query_selector("a[href*='/program/content/']")
+                    if not link_el:
+                        link_el = item if await item.get_attribute("href") else None
+                    content_url = ""
+                    if link_el:
+                        href = await link_el.get_attribute("href")
+                        if href:
+                            content_url = href
+
                     if title:
                         papers.append({
                             "title": title,
                             "authors": authors,
                             "abstract": "",
+                            "content_url": content_url,
                             "session": session_name,
                             "session_type": session_type,
                             "time": time_text,
@@ -201,6 +212,59 @@ async def scrape_chi_program(url: str = "https://programs.sigchi.org/chi/2026") 
     return all_papers
 
 
+async def fetch_abstracts(
+    papers: list[dict],
+    base_url: str = "https://programs.sigchi.org",
+) -> list[dict]:
+    """Fetch abstracts by visiting each paper's detail page. Resumable.
+
+    Skips papers that already have an abstract or have no content_url.
+    Saves progress every 100 papers.
+    """
+    to_fetch = [
+        (i, p) for i, p in enumerate(papers)
+        if not p.get("abstract") and p.get("content_url")
+    ]
+    if not to_fetch:
+        logger.info("All papers already have abstracts (or no URLs). Nothing to fetch.")
+        return papers
+
+    logger.info(f"Fetching abstracts for {len(to_fetch)} papers...")
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+
+        for count, (idx, paper) in enumerate(to_fetch):
+            url = base_url + paper["content_url"]
+            try:
+                await page.goto(url, wait_until="networkidle", timeout=30000)
+                await page.wait_for_timeout(1000)
+
+                # Abstract is in a <p> after <h4>Abstract</h4> inside white-block
+                abstract_el = await page.query_selector("white-block p")
+                if abstract_el:
+                    abstract = (await abstract_el.inner_text()).strip()
+                    papers[idx]["abstract"] = abstract
+
+            except Exception as e:
+                logger.warning(f"Failed to fetch abstract for '{paper['title'][:50]}': {e}")
+
+            if (count + 1) % 50 == 0:
+                logger.info(f"  Fetched {count + 1}/{len(to_fetch)} abstracts")
+
+            # Save progress every 100 papers
+            if (count + 1) % 100 == 0:
+                save_raw(papers)
+                logger.info(f"  Progress saved at {count + 1} abstracts")
+
+        await browser.close()
+
+    fetched = sum(1 for p in papers if p.get("abstract"))
+    logger.info(f"Abstracts fetched: {fetched}/{len(papers)} papers now have abstracts")
+    return papers
+
+
 def save_raw(papers: list[dict]) -> None:
     """Save raw scraped data."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -212,6 +276,8 @@ def save_raw(papers: list[dict]) -> None:
 async def run_full_pipeline():
     """Run scrape + classify."""
     papers = await scrape_chi_program()
+    save_raw(papers)
+    papers = await fetch_abstracts(papers)
     save_raw(papers)
 
     config = load_themes()
@@ -383,16 +449,24 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CHI 2026 Paper Pipeline")
     parser.add_argument(
         "mode",
-        choices=["scrape", "classify", "full"],
+        choices=["scrape", "abstracts", "classify", "full"],
         default="full",
         nargs="?",
-        help="Pipeline mode: scrape only, classify only, or full pipeline",
+        help="Pipeline mode: scrape, abstracts, classify, or full pipeline",
     )
     args = parser.parse_args()
 
     if args.mode == "scrape":
         papers = asyncio.run(scrape_chi_program())
         save_raw(papers)
+    elif args.mode == "abstracts":
+        raw_path = DATA_DIR / "chi2026_raw.json"
+        if not raw_path.exists():
+            logger.error("No raw data. Run 'scrape' first.")
+        else:
+            papers = json.loads(raw_path.read_text())
+            papers = asyncio.run(fetch_abstracts(papers))
+            save_raw(papers)
     elif args.mode == "classify":
         run_classify_only()
     else:
