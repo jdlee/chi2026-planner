@@ -187,24 +187,20 @@ def main():
     ascending = sort_col in ("start_time", "cluster_label")
     df_sorted = df.sort_values(sort_col, ascending=ascending, na_position="last")
 
-    # Build display table with key columns
-    display_cols = ["title", "authors", "session", "session_type", "date", "time", "location", "cluster_label"]
+    # Build display table columns
+    display_cols = ["title", "authors", "cluster_label", "session", "session_type", "date", "time", "location"]
     if "award" in df_sorted.columns:
         display_cols.insert(1, "award")
-    if "abstract" in df_sorted.columns:
-        display_cols.append("abstract")
-    # Add topic score columns (rounded for display)
     for t in topic_names:
         if t in df_sorted.columns:
             display_cols.append(t)
 
     display_df = df_sorted[["_index"] + [c for c in display_cols if c in df_sorted.columns]].copy()
-    # Round topic scores
     for t in topic_names:
         if t in display_df.columns:
             display_df[t] = display_df[t].round(2)
 
-    # Selection via checkboxes in the table
+    # Selection checkboxes
     display_df.insert(0, "Select", display_df["_index"].apply(lambda x: x in st.session_state.selected))
 
     edited = st.data_editor(
@@ -213,7 +209,6 @@ def main():
             "Select": st.column_config.CheckboxColumn("Sel", width="small"),
             "title": st.column_config.TextColumn("Title", width="large"),
             "authors": st.column_config.TextColumn("Authors", width="medium"),
-            "abstract": st.column_config.TextColumn("Abstract", width="large"),
             "session": st.column_config.TextColumn("Session", width="medium"),
             "session_type": st.column_config.TextColumn("Type", width="small"),
             "date": st.column_config.TextColumn("Date", width="small"),
@@ -242,6 +237,40 @@ def main():
             st.session_state.selected = new_selected
             save_selection()
             st.rerun()
+
+    # --- Paper Details: click title to expand ---
+    st.subheader("Paper Details")
+    for _, row in df_sorted.iterrows():
+        idx = int(row["_index"])
+        is_selected = idx in st.session_state.selected
+        award_badge = f" **[{row['award']}]**" if row.get("award") else ""
+        sel_marker = " ✅" if is_selected else ""
+
+        with st.expander(f"{row['title']}{award_badge}{sel_marker}"):
+            col_a, col_b = st.columns([1, 1])
+            with col_a:
+                st.markdown(f"**Authors:** {row.get('authors', '')}")
+                st.markdown(f"**Session:** {row.get('session', '')} ({row.get('session_type', '')})")
+                st.markdown(f"**When:** {row.get('date', '')} {row.get('time', '')} @ {row.get('location', '')}")
+                if row.get("cluster_label"):
+                    st.markdown(f"**Cluster:** {row['cluster_label']}")
+            with col_b:
+                scores = {
+                    t: row[t] for t in topic_names
+                    if t in row.index and row[t] >= min_relevance
+                }
+                if scores:
+                    st.markdown(
+                        "**Topics:** "
+                        + ", ".join(
+                            f"`{t}` ({s:.2f})"
+                            for t, s in sorted(scores.items(), key=lambda x: -x[1])
+                        )
+                    )
+            if row.get("abstract"):
+                st.markdown(f"**Abstract:** {row['abstract']}")
+            else:
+                st.caption("No abstract available — run `python chi_pipeline.py abstracts` to fetch.")
 
 
 if __name__ == "__main__":
