@@ -166,8 +166,10 @@ def save_clustered(result: dict) -> None:
     (DATA_DIR / "chi2026_clustered.json").write_text(
         json.dumps(result["papers"], indent=2)
     )
+    # Convert int64 keys to str for JSON serialization
+    topics_serializable = {str(k): v for k, v in result["topics"].items()}
     (DATA_DIR / "topics.json").write_text(
-        json.dumps({"topics": result["topics"], "topic_names": result["topic_names"]}, indent=2, default=str)
+        json.dumps({"topics": topics_serializable, "topic_names": result["topic_names"]}, indent=2)
     )
     logger.info(
         f"Saved {len(result['papers'])} clustered papers "
