@@ -1,6 +1,7 @@
-"""CHI 2026 Paper Pipeline: Scrape → Classify → Output"""
+"""CHI 2026 Paper Pipeline: Scrape -> Classify -> Output"""
 
 import json
+import re
 import asyncio
 import logging
 import argparse
@@ -20,84 +21,181 @@ DATA_DIR = ROOT / "data"
 CONFIG_DIR = ROOT / "config"
 
 
+def _parse_day_label(label: str) -> str:
+    """Parse day label like 'Monday, 13 April' -> '2026-04-13'."""
+    m = re.search(
+        r"(\d+)\s+(January|February|March|April|May|June|July|August|September|October|November|December)",
+        label,
+    )
+    if not m:
+        return ""
+    day_num = int(m.group(1))
+    month_map = {
+        "January": 1, "February": 2, "March": 3, "April": 4,
+        "May": 5, "June": 6, "July": 7, "August": 8,
+        "September": 9, "October": 10, "November": 11, "December": 12,
+    }
+    month_num = month_map[m.group(2)]
+    return f"2026-{month_num:02d}-{day_num:02d}"
+
+
+def _parse_time_range(text: str) -> tuple[str, str]:
+    """Parse '11:15 AM - 12:45 PM' into ('11:15', '12:45') in 24h format."""
+    parts = text.split(" - ")
+    times = []
+    for part in parts:
+        part = part.strip()
+        m = re.match(r"(\d+):(\d+)\s*(AM|PM)", part)
+        if m:
+            h, mi, ampm = int(m.group(1)), int(m.group(2)), m.group(3)
+            if ampm == "PM" and h != 12:
+                h += 12
+            elif ampm == "AM" and h == 12:
+                h = 0
+            times.append(f"{h:02d}:{mi:02d}")
+    start = times[0] if len(times) >= 1 else ""
+    end = times[1] if len(times) >= 2 else ""
+    return start, end
+
+
+async def _scrape_day_page(page, date_str: str) -> list[dict]:
+    """Scrape all papers from a single day's program page.
+
+    Assumes the page is already navigated to the day URL and loaded.
+    """
+    papers = []
+
+    # Scroll to load all timeslots on this day
+    prev_height = 0
+    for _ in range(10):
+        curr_height = await page.evaluate("document.body.scrollHeight")
+        if curr_height == prev_height:
+            break
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await page.wait_for_timeout(1500)
+        prev_height = curr_height
+    await page.evaluate("window.scrollTo(0, 0)")
+    await page.wait_for_timeout(500)
+
+    timeslots = await page.query_selector_all("div.timeslot")
+    logger.info(f"  {date_str}: found {len(timeslots)} timeslots")
+
+    for timeslot in timeslots:
+        time_el = await timeslot.query_selector("h3.timeslot-time")
+        time_text = (await time_el.inner_text()).strip() if time_el else ""
+        slot_start, slot_end = _parse_time_range(time_text)
+
+        session_cards = await timeslot.query_selector_all("session-card")
+
+        for card in session_cards:
+            name_el = await card.query_selector("span.name")
+            session_name = (await name_el.inner_text()).strip() if name_el else "Unknown"
+
+            type_el = await card.query_selector("span.type-name")
+            session_type = (await type_el.inner_text()).strip() if type_el else ""
+
+            room_el = await card.query_selector("session-room-data span[translate]")
+            location = (await room_el.inner_text()).strip() if room_el else ""
+
+            count_el = await card.query_selector("contents-quantity")
+            count_text = (await count_el.inner_text()).strip() if count_el else ""
+            item_match = re.match(r"(\d+)\s+item", count_text)
+            item_count = int(item_match.group(1)) if item_match else 0
+
+            if item_count == 0:
+                continue
+
+            expand_btn = await card.query_selector("button.icon-btn-toggle-card")
+            if not expand_btn:
+                continue
+
+            try:
+                await expand_btn.click()
+                await page.wait_for_timeout(1500)
+
+                item_cards = await card.query_selector_all(
+                    "item-card, content-item, .item-card"
+                )
+                if not item_cards:
+                    item_cards = await card.query_selector_all(
+                        "a.link-block:not(.session-card-header)"
+                    )
+
+                for item in item_cards:
+                    title_el = await item.query_selector(
+                        "span.name, h4.card-data-name, .card-data-name span.name"
+                    )
+                    title = (await title_el.inner_text()).strip() if title_el else ""
+
+                    authors_el = await item.query_selector(
+                        "person-list, .people-container"
+                    )
+                    authors = (await authors_el.inner_text()).strip() if authors_el else ""
+                    authors = re.sub(r"\s*,\s*", ", ", authors).strip(", ")
+
+                    if title:
+                        papers.append({
+                            "title": title,
+                            "authors": authors,
+                            "abstract": "",
+                            "session": session_name,
+                            "session_type": session_type,
+                            "time": time_text,
+                            "location": location,
+                            "date": date_str,
+                            "start_time": slot_start,
+                            "end_time": slot_end,
+                        })
+
+                await expand_btn.click()
+                await page.wait_for_timeout(300)
+
+            except Exception as e:
+                logger.warning(f"Failed to expand session '{session_name}': {e}")
+
+        logger.info(
+            f"  {time_text}: {len(session_cards)} sessions, {len(papers)} papers so far"
+        )
+
+    return papers
+
+
 async def scrape_chi_program(url: str = "https://programs.sigchi.org/chi/2026") -> list[dict]:
     """Scrape CHI 2026 program using Playwright.
 
-    NOTE: The CSS selectors below are initial guesses based on typical
-    conference program site patterns. Run this once, inspect the output,
-    and update selectors as needed. The site may also require clicking
-    through navigation (days, tracks) to load all papers.
+    Navigates to each day's page individually to avoid Angular's virtual
+    scrolling issues on the 'all' index page.
     """
-    papers = []
+    # Day URL slugs for CHI 2026 (April 13-17)
+    day_pages = [
+        ("13-apr", "2026-04-13"),
+        ("14-apr", "2026-04-14"),
+        ("15-apr", "2026-04-15"),
+        ("16-apr", "2026-04-16"),
+        ("17-apr", "2026-04-17"),
+    ]
+
+    all_papers = []
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
 
-        logger.info(f"Navigating to {url}")
-        await page.goto(url, wait_until="networkidle", timeout=60000)
+        for day_slug, date_str in day_pages:
+            day_url = f"{url.rstrip('/')}/program/{day_slug}"
+            logger.info(f"Navigating to {day_url}")
+            await page.goto(day_url, wait_until="networkidle", timeout=60000)
+            await page.wait_for_timeout(3000)
 
-        # Wait for content to render
-        await page.wait_for_timeout(3000)
-
-        # --- SELECTOR DISCOVERY MODE ---
-        discovery_file = DATA_DIR / "page_dump.html"
-        if not (DATA_DIR / "chi2026_raw.json").exists():
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
-            html = await page.content()
-            discovery_file.write_text(html)
-            logger.info(f"Page HTML dumped to {discovery_file} for selector discovery")
-
-        # --- PAPER EXTRACTION ---
-        # These selectors are PLACEHOLDERS — update after inspecting page_dump.html
-        session_elements = await page.query_selector_all("[class*='session'], [class*='Session']")
-        logger.info(f"Found {len(session_elements)} session elements")
-
-        for session_el in session_elements:
-            session_title = await session_el.query_selector(
-                "[class*='title'], [class*='name'], h2, h3"
-            )
-            session_name = await session_title.inner_text() if session_title else "Unknown Session"
-
-            time_el = await session_el.query_selector("[class*='time'], [class*='date'], time")
-            time_text = await time_el.inner_text() if time_el else ""
-
-            location_el = await session_el.query_selector("[class*='room'], [class*='location']")
-            location_text = await location_el.inner_text() if location_el else ""
-
-            paper_elements = await session_el.query_selector_all(
-                "[class*='paper'], [class*='item'], [class*='entry'], [class*='submission']"
-            )
-
-            for paper_el in paper_elements:
-                title_el = await paper_el.query_selector("[class*='title'], h3, h4, a")
-                title = await title_el.inner_text() if title_el else "Untitled"
-
-                authors_el = await paper_el.query_selector("[class*='author']")
-                authors = await authors_el.inner_text() if authors_el else ""
-
-                abstract_el = await paper_el.query_selector("[class*='abstract'], [class*='description']")
-                abstract = await abstract_el.inner_text() if abstract_el else ""
-
-                paper_time_el = await paper_el.query_selector("[class*='time'], time")
-                paper_time = await paper_time_el.inner_text() if paper_time_el else time_text
-
-                papers.append({
-                    "title": title.strip(),
-                    "authors": authors.strip(),
-                    "abstract": abstract.strip(),
-                    "session": session_name.strip(),
-                    "time": paper_time.strip(),
-                    "location": location_text.strip(),
-                    "date": "",
-                    "start_time": "",
-                    "end_time": "",
-                })
+            day_papers = await _scrape_day_page(page, date_str)
+            all_papers.extend(day_papers)
+            logger.info(f"Day {date_str}: {len(day_papers)} papers ({len(all_papers)} total)")
 
         await browser.close()
 
-    logger.info(f"Scraped {len(papers)} papers")
-    return papers
+    logger.info(f"Scraped {len(all_papers)} papers total across {len(day_pages)} days")
+    return all_papers
 
 
 def save_raw(papers: list[dict]) -> None:
@@ -133,10 +231,8 @@ def classify_papers(papers: list[dict], config: dict) -> tuple[list[dict], list[
     """
     client = anthropic.Anthropic()
     seed_themes = config["seed_themes"]
-    threshold = config.get("relevance_threshold", 0.3)
     max_emergent = config.get("max_emergent_themes", 10)
 
-    theme_names = [t["name"] for t in seed_themes]
     theme_descriptions = "\n".join(
         f"- {t['name']}: {t['description']}" for t in seed_themes
     )
@@ -192,8 +288,6 @@ Rules:
         try:
             result = json.loads(response_text)
         except json.JSONDecodeError:
-            # Try to extract JSON from markdown code block or surrounding text
-            import re
             json_match = re.search(r'\{[\s\S]*\}', response_text)
             if json_match:
                 result = json.loads(json_match.group())
