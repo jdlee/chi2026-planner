@@ -6,3 +6,6 @@ streamlit>=1.45.0
 altair>=5.5.0
 icalendar>=6.1.0
 pandas>=2.2.0
+scikit-learn>=1.6.0
+umap-learn>=0.5.7
+hdbscan>=0.8.40
