@@ -187,9 +187,21 @@ Rules:
             messages=[{"role": "user", "content": prompt}],
         )
 
-        result = json.loads(response.content[0].text)
+        # Extract JSON from response, handling possible preamble text
+        response_text = response.content[0].text
+        try:
+            result = json.loads(response_text)
+        except json.JSONDecodeError:
+            # Try to extract JSON from markdown code block or surrounding text
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                result = json.loads(json_match.group())
+            else:
+                logger.error(f"Failed to parse classification response for batch {i}")
+                continue
 
-        for j, paper_result in enumerate(result["papers"]):
+        for j, paper_result in enumerate(result.get("papers", [])):
             paper = batch[j].copy()
             paper["theme_scores"] = paper_result["theme_scores"]
             classified.append(paper)
@@ -244,7 +256,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.mode == "scrape":
-        asyncio.run(scrape_chi_program())
+        papers = asyncio.run(scrape_chi_program())
+        save_raw(papers)
     elif args.mode == "classify":
         run_classify_only()
     else:
