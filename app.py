@@ -585,17 +585,20 @@ def main():
             nodes_df["highlighted"] = True
 
         # Color & size: highlighted = dark macro color + larger; others = gray + smaller
-        def darken_rgba(rgba_str):
-            parts = rgba_str.replace("rgba(", "").replace(")", "").split(",")
-            r, g, b = [max(0, int(p.strip()) - 100) for p in parts[:3]]
-            return f"rgb({r},{g},{b})"
+        # Pre-compute dark color for each macro color (vectorized via lookup)
+        _dark_cache = {}
+        def _darken(rgba_str):
+            if rgba_str not in _dark_cache:
+                parts = rgba_str.replace("rgba(", "").replace(")", "").split(",")
+                r, g, b = [max(0, int(p.strip()) - 100) for p in parts[:3]]
+                _dark_cache[rgba_str] = f"rgb({r},{g},{b})"
+            return _dark_cache[rgba_str]
 
-        nodes_df["text_color"] = nodes_df.apply(
-            lambda r: darken_rgba(r["color"]) if r["highlighted"]
-            else "rgb(180,180,180)",
-            axis=1,
+        nodes_df["dark_color"] = nodes_df["color"].map(_darken)
+        nodes_df["text_color"] = np.where(
+            nodes_df["highlighted"], nodes_df["dark_color"], "rgb(180,180,180)"
         )
-        nodes_df["text_size"] = nodes_df["highlighted"].map({True: 12, False: 10})
+        nodes_df["text_size"] = np.where(nodes_df["highlighted"], 12, 10)
 
         node_selection = alt.selection_point(
             name="node_sel", fields=["level", "label"], on="click",
@@ -662,7 +665,7 @@ def main():
                     del st.session_state["sankey_filter"]
                 else:
                     st.session_state["sankey_filter"] = new_filter
-                st.rerun()
+                st.rerun(scope="app")
 
         # Show active filter with clear button
         if "sankey_filter" in st.session_state:
@@ -673,7 +676,7 @@ def main():
             with col_clear:
                 if st.button("Clear filter", key="clear_sankey"):
                     del st.session_state["sankey_filter"]
-                    st.rerun()
+                    st.rerun(scope="app")
 
         st.caption(
             f"{len(topics.get('macro', {})) - 1} macro themes  /  "
