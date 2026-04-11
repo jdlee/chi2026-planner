@@ -920,13 +920,6 @@ def main():
 
     grid_df = display_df.copy()  # keep _index for selection tracking
 
-    # Collect unique values for set filters
-    macro_vals = sorted(grid_df["macro_label"].dropna().unique().tolist()) if "macro_label" in grid_df.columns else []
-    mid_vals = sorted(grid_df["mid_label"].dropna().unique().tolist()) if "mid_label" in grid_df.columns else []
-    micro_vals = sorted(grid_df["cluster_label"].dropna().unique().tolist()) if "cluster_label" in grid_df.columns else []
-    date_vals = sorted(grid_df["date"].dropna().unique().tolist()) if "date" in grid_df.columns else []
-    room_vals = sorted(grid_df["location"].dropna().unique().tolist()) if "location" in grid_df.columns else []
-
     default_col = {
         "filter": "agTextColumnFilter",
         "filterParams": {"filterOptions": ["contains"], "maxNumConditions": 1},
@@ -964,32 +957,31 @@ def main():
         if has_awards:
             col_defs.append({
                 "field": "award", "headerName": "Award", "width": 75, "maxWidth": 85,
-                "filter": "agSetColumnFilter",
-                "filterParams": {"values": award_vals, "suppressMiniFilter": True},
+                "filter": "agTextColumnFilter",
             })
     if "macro_label" in grid_df.columns:
         col_defs.append({
             "field": "macro_label", "headerName": "Macro", "minWidth": 150,
-            "filter": "agSetColumnFilter", "filterParams": {"values": macro_vals},
+            "filter": "agTextColumnFilter",
         })
     if "mid_label" in grid_df.columns:
         col_defs.append({
             "field": "mid_label", "headerName": "Mid", "minWidth": 150,
-            "filter": "agSetColumnFilter", "filterParams": {"values": mid_vals},
+            "filter": "agTextColumnFilter",
         })
     if "cluster_label" in grid_df.columns:
         col_defs.append({
             "field": "cluster_label", "headerName": "Micro", "minWidth": 150,
-            "filter": "agSetColumnFilter", "filterParams": {"values": micro_vals},
+            "filter": "agTextColumnFilter",
         })
     col_defs.append({
         "field": "date", "headerName": "Date", "minWidth": 100,
-        "filter": "agSetColumnFilter", "filterParams": {"values": date_vals},
+        "filter": "agTextColumnFilter",
     })
     col_defs.append({"field": "time", "headerName": "Time", "minWidth": 120, "filter": "agTextColumnFilter"})
     col_defs.append({
         "field": "location", "headerName": "Room", "minWidth": 80,
-        "filter": "agSetColumnFilter", "filterParams": {"values": room_vals},
+        "filter": "agTextColumnFilter",
     })
     grid_options = {
         "defaultColDef": default_col,
@@ -1006,7 +998,7 @@ def main():
         update_mode=GridUpdateMode.FILTERING_CHANGED | GridUpdateMode.SELECTION_CHANGED,
         fit_columns_on_grid_load=False,
         height=500,
-        enable_enterprise_modules=True,
+        enable_enterprise_modules=False,
         key=f"paper_aggrid_{'search' if has_search else 'default'}",
     )
 
