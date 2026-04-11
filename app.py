@@ -535,9 +535,7 @@ def main():
     min_relevance = 0.2
 
     # --- Topic Hierarchy (Altair strip chart) ---
-    @st.fragment
-    def topic_hierarchy_fragment():
-        """Isolated fragment so clicks only re-render the chart, not the full page."""
+    def topic_hierarchy_section():
         nodes_df, _links_df = build_hierarchy_chart_data(topics, hierarchy)
         nodes_df = nodes_df.copy()  # don't mutate cached df
 
@@ -665,7 +663,7 @@ def main():
                     del st.session_state["sankey_filter"]
                 else:
                     st.session_state["sankey_filter"] = new_filter
-                st.rerun(scope="app")
+                st.rerun()
 
         # Show active filter with clear button
         if "sankey_filter" in st.session_state:
@@ -676,7 +674,7 @@ def main():
             with col_clear:
                 if st.button("Clear filter", key="clear_sankey"):
                     del st.session_state["sankey_filter"]
-                    st.rerun(scope="app")
+                    st.rerun()
 
         st.caption(
             f"{len(topics.get('macro', {})) - 1} macro themes  /  "
@@ -686,7 +684,7 @@ def main():
 
     with st.expander("Topic Hierarchy", expanded=False):
         if topics and hierarchy:
-            topic_hierarchy_fragment()
+            topic_hierarchy_section()
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
