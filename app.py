@@ -7,7 +7,6 @@ import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
-from st_aggrid import AgGrid, GridUpdateMode
 
 from export import generate_ics, generate_markdown
 
@@ -918,120 +917,65 @@ def main():
         display_df["search_match"] = ""
         display_df["search_score"] = np.nan
 
-    grid_df = display_df.copy()  # keep _index for selection tracking
-
-    default_col = {
-        "filter": "agTextColumnFilter",
-        "filterParams": {"filterOptions": ["contains"], "maxNumConditions": 1},
-        "sortable": True,
-        "resizable": True,
-        "floatingFilter": True,
-        "wrapHeaderText": True,
-        "autoHeaderHeight": True,
-    }
-
+    # Build display table
     has_search = search_query and len(search_query.strip()) >= 2
 
-    col_defs = [
-        {"field": "_index", "hide": True},
-        {"field": "search_score", "hide": True},
-        {"field": "title", "headerName": "Title", "minWidth": 400, "flex": 2,
-         "filter": "agTextColumnFilter", "checkboxSelection": True, "headerCheckboxSelection": True},
-    ]
+    # Select visible columns
+    visible_cols = ["title"]
     if has_search:
-        col_defs.append({
-            "field": "search_match", "headerName": "Match", "minWidth": 207, "maxWidth": 300,
-            "filter": "agTextColumnFilter",
-            "sortable": True,
-        })
-        # Unhide search_score and use it for default sort
-        col_defs[1] = {"field": "search_score", "hide": True, "sort": "desc"}
-    else:
-        col_defs.append({"field": "search_match", "hide": True})
-    col_defs.append(
-        {"field": "authors", "headerName": "Authors", "minWidth": 200, "filter": "agTextColumnFilter"},
-    )
-    if "award" in grid_df.columns:
-        award_vals = sorted(grid_df["award"].dropna().unique().tolist())
-        has_awards = any(v for v in award_vals)
-        if has_awards:
-            col_defs.append({
-                "field": "award", "headerName": "Award", "width": 75, "maxWidth": 85,
-                "filter": "agTextColumnFilter",
-            })
-    if "macro_label" in grid_df.columns:
-        col_defs.append({
-            "field": "macro_label", "headerName": "Macro", "minWidth": 150,
-            "filter": "agTextColumnFilter",
-        })
-    if "mid_label" in grid_df.columns:
-        col_defs.append({
-            "field": "mid_label", "headerName": "Mid", "minWidth": 150,
-            "filter": "agTextColumnFilter",
-        })
-    if "cluster_label" in grid_df.columns:
-        col_defs.append({
-            "field": "cluster_label", "headerName": "Micro", "minWidth": 150,
-            "filter": "agTextColumnFilter",
-        })
-    col_defs.append({
-        "field": "date", "headerName": "Date", "minWidth": 100,
-        "filter": "agTextColumnFilter",
-    })
-    col_defs.append({"field": "time", "headerName": "Time", "minWidth": 120, "filter": "agTextColumnFilter"})
-    col_defs.append({
-        "field": "location", "headerName": "Room", "minWidth": 80,
-        "filter": "agTextColumnFilter",
-    })
-    grid_options = {
-        "defaultColDef": default_col,
-        "columnDefs": col_defs,
-        "rowSelection": "multiple",
-        "suppressRowClickSelection": True,
-        "pagination": True,
-        "paginationPageSize": 50,
+        visible_cols.append("search_match")
+    visible_cols.append("authors")
+    if "award" in display_df.columns and display_df["award"].any():
+        visible_cols.append("award")
+    if "macro_label" in display_df.columns:
+        visible_cols.extend(["macro_label", "mid_label", "cluster_label"])
+    visible_cols.extend(["date", "time", "location"])
+
+    grid_df = display_df[["_index"] + [c for c in visible_cols if c in display_df.columns]].copy()
+
+    # Column display config
+    col_config = {
+        "_index": None,  # hide
+        "title": st.column_config.TextColumn("Title", width="large"),
+        "search_match": st.column_config.TextColumn("Match", width="medium"),
+        "authors": st.column_config.TextColumn("Authors", width="medium"),
+        "award": st.column_config.TextColumn("Award", width="small"),
+        "macro_label": st.column_config.TextColumn("Macro", width="small"),
+        "mid_label": st.column_config.TextColumn("Mid", width="small"),
+        "cluster_label": st.column_config.TextColumn("Micro", width="small"),
+        "date": st.column_config.TextColumn("Date", width="small"),
+        "time": st.column_config.TextColumn("Time", width="small"),
+        "location": st.column_config.TextColumn("Room", width="small"),
     }
 
-    grid_response = AgGrid(
-        grid_df,
-        gridOptions=grid_options,
-        update_mode=GridUpdateMode.FILTERING_CHANGED | GridUpdateMode.SELECTION_CHANGED,
-        fit_columns_on_grid_load=False,
-        height=500,
-        enable_enterprise_modules=False,
-        key=f"paper_aggrid_{'search' if has_search else 'default'}",
+    paper_count_placeholder.markdown(
+        f"**Papers** &nbsp;&middot;&nbsp; {len(grid_df)}"
     )
 
-    # Update paper count based on filtered rows
-    filtered_data = grid_response.get("data", display_df)
-    if filtered_data is not None:
-        n_filtered = len(filtered_data)
-    else:
-        n_filtered = len(display_df)
-    if n_filtered < len(display_df):
-        paper_count_placeholder.markdown(
-            f"**Papers** &nbsp;&middot;&nbsp; {n_filtered} of {len(display_df)}"
-        )
-    else:
-        paper_count_placeholder.markdown(f"**Papers** &nbsp;&middot;&nbsp; {len(display_df)}")
+    event = st.dataframe(
+        grid_df,
+        column_config=col_config,
+        use_container_width=True,
+        height=500,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="multi-row",
+        key=f"paper_table_{'search' if has_search else 'default'}",
+    )
 
-    # Sync AgGrid row selections back to session state (merge, don't replace)
-    selected_rows = grid_response.get("selected_rows", None)
-    if selected_rows is not None and len(selected_rows) > 0:
-        selected_df = pd.DataFrame(selected_rows)
+    # Sync selections back to session state (merge, don't replace)
+    if event and event.selection and event.selection.rows:
+        selected_indices = event.selection.rows
         grid_selected = set()
-        if "_index" in selected_df.columns:
-            grid_selected = set(int(i) for i in selected_df["_index"])
-        else:
-            for _, sel_row in selected_df.iterrows():
-                match = display_df[display_df["title"] == sel_row["title"]]
-                if not match.empty:
-                    grid_selected.add(int(match.iloc[0]["_index"]))
-        # Add newly selected papers to existing selection
-        updated = st.session_state.selected | grid_selected
-        if updated != st.session_state.selected:
-            st.session_state.selected = updated
-            save_selection()
+        for row_idx in selected_indices:
+            if row_idx < len(grid_df):
+                paper_idx = int(grid_df.iloc[row_idx]["_index"])
+                grid_selected.add(paper_idx)
+        if grid_selected:
+            updated = st.session_state.selected | grid_selected
+            if updated != st.session_state.selected:
+                st.session_state.selected = updated
+                save_selection()
 
     # --- Paper Details ---
     n_sel = len(st.session_state.selected)
