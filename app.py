@@ -932,11 +932,13 @@ def main():
         visible_cols.extend(["macro_label", "mid_label", "cluster_label"])
     visible_cols.extend(["date", "time", "location"])
 
-    grid_df = display_df[["_index"] + [c for c in visible_cols if c in display_df.columns]].copy()
+    # Keep _index mapping separate, exclude from displayed dataframe
+    index_map = display_df["_index"].tolist()
+    grid_df = display_df[[c for c in visible_cols if c in display_df.columns]].copy()
+    grid_df = grid_df.reset_index(drop=True)
 
     # Column display config
     col_config = {
-        "_index": None,  # hide
         "title": st.column_config.TextColumn("Title", width="large"),
         "search_match": st.column_config.TextColumn("Match", width="medium"),
         "authors": st.column_config.TextColumn("Authors", width="medium"),
@@ -969,9 +971,8 @@ def main():
         selected_indices = event.selection.rows
         grid_selected = set()
         for row_idx in selected_indices:
-            if row_idx < len(grid_df):
-                paper_idx = int(grid_df.iloc[row_idx]["_index"])
-                grid_selected.add(paper_idx)
+            if row_idx < len(index_map):
+                grid_selected.add(int(index_map[row_idx]))
         if grid_selected:
             updated = st.session_state.selected | grid_selected
             if updated != st.session_state.selected:
