@@ -24,23 +24,6 @@ DATA_DIR = ROOT / "data"
 CONFIG_DIR = ROOT / "config"
 
 
-def _parse_day_label(label: str) -> str:
-    """Parse day label like 'Monday, 13 April' -> '2026-04-13'."""
-    m = re.search(
-        r"(\d+)\s+(January|February|March|April|May|June|July|August|September|October|November|December)",
-        label,
-    )
-    if not m:
-        return ""
-    day_num = int(m.group(1))
-    month_map = {
-        "January": 1, "February": 2, "March": 3, "April": 4,
-        "May": 5, "June": 6, "July": 7, "August": 8,
-        "September": 9, "October": 10, "November": 11, "December": 12,
-    }
-    month_num = month_map[m.group(2)]
-    return f"2026-{month_num:02d}-{day_num:02d}"
-
 
 def _parse_time_range(text: str) -> tuple[str, str]:
     """Parse '11:15 AM - 12:45 PM' into ('11:15', '12:45') in 24h format."""
@@ -272,6 +255,68 @@ async def fetch_abstracts(
     return papers
 
 
+def deduplicate_papers(papers: list[dict]) -> list[dict]:
+    """Merge papers that appear in multiple timeslots into single entries.
+
+    CHI schedules posters/demos across multiple sessions. We keep one entry
+    per unique content_url, merging all scheduled appearances into a
+    'schedule' list. For papers without a content_url, we deduplicate by title.
+    The primary (first) appearance's session info stays in the top-level fields.
+    """
+    from collections import OrderedDict
+
+    seen = OrderedDict()  # key -> merged paper
+    title_to_key = {}  # title -> first key, for cross-URL dedup
+    for p in papers:
+        key = p.get("content_url") or p.get("title", "")
+        if not key:
+            seen[id(p)] = p
+            continue
+
+        # Also check if we've seen this title under a different content_url
+        title = p.get("title", "")
+        if key not in seen and title in title_to_key:
+            key = title_to_key[title]
+
+        if key not in seen:
+            if title:
+                title_to_key[title] = key
+            merged = dict(p)
+            merged["schedule"] = [{
+                "session": p.get("session", ""),
+                "session_type": p.get("session_type", ""),
+                "date": p.get("date", ""),
+                "time": p.get("time", ""),
+                "start_time": p.get("start_time", ""),
+                "end_time": p.get("end_time", ""),
+                "location": p.get("location", ""),
+            }]
+            seen[key] = merged
+        else:
+            merged = seen[key]
+            merged["schedule"].append({
+                "session": p.get("session", ""),
+                "session_type": p.get("session_type", ""),
+                "date": p.get("date", ""),
+                "time": p.get("time", ""),
+                "start_time": p.get("start_time", ""),
+                "end_time": p.get("end_time", ""),
+                "location": p.get("location", ""),
+            })
+            # Keep the abstract if the existing one is empty
+            if not merged.get("abstract") and p.get("abstract"):
+                merged["abstract"] = p["abstract"]
+            # Keep the award if the existing one is empty
+            if not merged.get("award") and p.get("award"):
+                merged["award"] = p["award"]
+
+    result = list(seen.values())
+    n_removed = len(papers) - len(result)
+    if n_removed:
+        logger.info(f"Deduplicated: {len(papers)} -> {len(result)} papers ({n_removed} duplicate appearances merged)")
+    return result
+
+
 def save_raw(papers: list[dict]) -> None:
     """Save raw scraped data."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -285,6 +330,7 @@ async def run_full_pipeline():
     papers = await scrape_chi_program()
     save_raw(papers)
     papers = await fetch_abstracts(papers)
+    papers = deduplicate_papers(papers)
     save_raw(papers)
 
     config = load_themes()
@@ -456,10 +502,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CHI 2026 Paper Pipeline")
     parser.add_argument(
         "mode",
-        choices=["scrape", "abstracts", "classify", "cluster", "full"],
+        choices=["scrape", "abstracts", "dedup", "classify", "cluster", "full"],
         default="full",
         nargs="?",
-        help="Pipeline mode: scrape, abstracts, classify, or full pipeline",
+        help="Pipeline mode: scrape, abstracts, dedup, classify, cluster, or full",
     )
     args = parser.parse_args()
 
@@ -473,6 +519,14 @@ if __name__ == "__main__":
         else:
             papers = json.loads(raw_path.read_text())
             papers = asyncio.run(fetch_abstracts(papers))
+            save_raw(papers)
+    elif args.mode == "dedup":
+        raw_path = DATA_DIR / "chi2026_raw.json"
+        if not raw_path.exists():
+            logger.error("No raw data. Run 'scrape' first.")
+        else:
+            papers = json.loads(raw_path.read_text())
+            papers = deduplicate_papers(papers)
             save_raw(papers)
     elif args.mode == "classify":
         run_classify_only()

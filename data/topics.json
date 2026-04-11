@@ -1,0 +1,1214 @@
+{
+  "topics": {
+    "macro": {
+      "0": {
+        "label": "Privacy \u2013 LLM \u2013 AI",
+        "terms": [
+          "privacy",
+          "llm",
+          "ai"
+        ],
+        "count": 248
+      },
+      "1": {
+        "label": "AI \u2013 Human \u2013 Generative",
+        "terms": [
+          "ai",
+          "human",
+          "generative"
+        ],
+        "count": 473
+      },
+      "2": {
+        "label": "VR \u2013 Reality \u2013 Virtual",
+        "terms": [
+          "vr",
+          "reality",
+          "virtual"
+        ],
+        "count": 462
+      },
+      "3": {
+        "label": "Child \u2013 AI \u2013 Game",
+        "terms": [
+          "child",
+          "ai",
+          "game"
+        ],
+        "count": 187
+      },
+      "4": {
+        "label": "Older \u2013 Health \u2013 Adult",
+        "terms": [
+          "older",
+          "health",
+          "adult"
+        ],
+        "count": 329
+      },
+      "5": {
+        "label": "Data \u2013 HCI \u2013 Design",
+        "terms": [
+          "data",
+          "hci",
+          "design"
+        ],
+        "count": 221
+      },
+      "6": {
+        "label": "Fabrication \u2013 3D \u2013 Color",
+        "terms": [
+          "fabrication",
+          "3d",
+          "color"
+        ],
+        "count": 79
+      },
+      "7": {
+        "label": "Learning \u2013 AI \u2013 Feedback",
+        "terms": [
+          "learning",
+          "ai",
+          "feedback"
+        ],
+        "count": 168
+      },
+      "8": {
+        "label": "Gaze \u2013 Accessibility \u2013 Blind",
+        "terms": [
+          "gaze",
+          "accessibility",
+          "blind"
+        ],
+        "count": 169
+      },
+      "9": {
+        "label": "Robot \u2013 Human \u2013 AI",
+        "terms": [
+          "robot",
+          "human",
+          "ai"
+        ],
+        "count": 235
+      }
+    },
+    "mid": {
+      "0": {
+        "label": "Stress \u2013 Emotion \u2013 Body",
+        "terms": [
+          "stress",
+          "emotion",
+          "body"
+        ],
+        "count": 106
+      },
+      "1": {
+        "label": "Player \u2013 Autistic \u2013 ADHD",
+        "terms": [
+          "player",
+          "autistic",
+          "adhd"
+        ],
+        "count": 132
+      },
+      "2": {
+        "label": "GENAI \u2013 Persona \u2013 Youth",
+        "terms": [
+          "genai",
+          "persona",
+          "youth"
+        ],
+        "count": 97
+      },
+      "3": {
+        "label": "Care \u2013 Gender \u2013 Patient",
+        "terms": [
+          "care",
+          "gender",
+          "patient"
+        ],
+        "count": 64
+      },
+      "4": {
+        "label": "Trust \u2013 Language \u2013 Large",
+        "terms": [
+          "trust",
+          "language",
+          "large"
+        ],
+        "count": 124
+      },
+      "5": {
+        "label": "Driving \u2013 Eye \u2013 Attention",
+        "terms": [
+          "driving",
+          "eye",
+          "attention"
+        ],
+        "count": 83
+      },
+      "6": {
+        "label": "AR \u2013 XR \u2013 MR",
+        "terms": [
+          "ar",
+          "xr",
+          "mr"
+        ],
+        "count": 109
+      },
+      "7": {
+        "label": "Design \u2013 Study \u2013 Food",
+        "terms": [
+          "design",
+          "study",
+          "food"
+        ],
+        "count": 218
+      },
+      "8": {
+        "label": "Decision \u2013 System \u2013 Making",
+        "terms": [
+          "decision",
+          "system",
+          "making"
+        ],
+        "count": 184
+      },
+      "9": {
+        "label": "Nature \u2013 Urban \u2013 Human",
+        "terms": [
+          "nature",
+          "urban",
+          "human"
+        ],
+        "count": 82
+      },
+      "10": {
+        "label": "Haptic \u2013 Thermal \u2013 Empathy",
+        "terms": [
+          "haptic",
+          "thermal",
+          "empathy"
+        ],
+        "count": 121
+      },
+      "11": {
+        "label": "Smart \u2013 Home \u2013 Consent",
+        "terms": [
+          "smart",
+          "home",
+          "consent"
+        ],
+        "count": 81
+      },
+      "12": {
+        "label": "Community \u2013 CHI \u2013 Climate",
+        "terms": [
+          "community",
+          "chi",
+          "climate"
+        ],
+        "count": 74
+      },
+      "13": {
+        "label": "Touch \u2013 Hand \u2013 Finger",
+        "terms": [
+          "touch",
+          "hand",
+          "finger"
+        ],
+        "count": 126
+      },
+      "14": {
+        "label": "Speech \u2013 Measurement \u2013 Speaker",
+        "terms": [
+          "speech",
+          "measurement",
+          "speaker"
+        ],
+        "count": 17
+      },
+      "15": {
+        "label": "Visualization \u2013 Service \u2013 Literacy",
+        "terms": [
+          "visualization",
+          "service",
+          "literacy"
+        ],
+        "count": 65
+      },
+      "16": {
+        "label": "Deaf \u2013 Learner \u2013 Video",
+        "terms": [
+          "deaf",
+          "learner",
+          "video"
+        ],
+        "count": 76
+      },
+      "17": {
+        "label": "Policy \u2013 Standard \u2013 Futuring",
+        "terms": [
+          "policy",
+          "standard",
+          "futuring"
+        ],
+        "count": 15
+      },
+      "18": {
+        "label": "BLV \u2013 Vision \u2013 UI",
+        "terms": [
+          "blv",
+          "vision",
+          "ui"
+        ],
+        "count": 86
+      },
+      "19": {
+        "label": "Agent \u2013 Multi \u2013 XAI",
+        "terms": [
+          "agent",
+          "multi",
+          "xai"
+        ],
+        "count": 82
+      },
+      "20": {
+        "label": "Wellbeing \u2013 Safety \u2013 Tracking",
+        "terms": [
+          "wellbeing",
+          "safety",
+          "tracking"
+        ],
+        "count": 56
+      },
+      "21": {
+        "label": "Student \u2013 Programming \u2013 Coding",
+        "terms": [
+          "student",
+          "programming",
+          "coding"
+        ],
+        "count": 92
+      },
+      "22": {
+        "label": "Woman \u2013 Mental \u2013 Reproductive",
+        "terms": [
+          "woman",
+          "mental",
+          "reproductive"
+        ],
+        "count": 119
+      },
+      "23": {
+        "label": "Animation \u2013 Size \u2013 Sampling",
+        "terms": [
+          "animation",
+          "size",
+          "sampling"
+        ],
+        "count": 15
+      },
+      "24": {
+        "label": "Generated \u2013 Image \u2013 Content",
+        "terms": [
+          "generated",
+          "image",
+          "content"
+        ],
+        "count": 59
+      },
+      "25": {
+        "label": "Writing \u2013 Creative \u2013 Creativity",
+        "terms": [
+          "writing",
+          "creative",
+          "creativity"
+        ],
+        "count": 51
+      },
+      "26": {
+        "label": "Printing \u2013 Physicalization \u2013 Material",
+        "terms": [
+          "printing",
+          "physicalization",
+          "material"
+        ],
+        "count": 64
+      },
+      "27": {
+        "label": "Social Medium \u2013 Moderation \u2013 Platform",
+        "terms": [
+          "social medium",
+          "moderation",
+          "platform"
+        ],
+        "count": 90
+      },
+      "28": {
+        "label": "Autonomy \u2013 Deceptive \u2013 Dark",
+        "terms": [
+          "autonomy",
+          "deceptive",
+          "dark"
+        ],
+        "count": 28
+      },
+      "29": {
+        "label": "Voice \u2013 Communication \u2013 Relational",
+        "terms": [
+          "voice",
+          "communication",
+          "relational"
+        ],
+        "count": 55
+      }
+    },
+    "fine": {
+      "0": {
+        "label": "Robotic \u2013 HRI \u2013 Expressive",
+        "terms": [
+          "robotic",
+          "hri",
+          "expressive"
+        ],
+        "count": 42
+      },
+      "1": {
+        "label": "Prompt \u2013 Writer \u2013 Text",
+        "terms": [
+          "prompt",
+          "writer",
+          "text"
+        ],
+        "count": 25
+      },
+      "2": {
+        "label": "Play \u2013 Gameplay \u2013 Toxic",
+        "terms": [
+          "play",
+          "gameplay",
+          "toxic"
+        ],
+        "count": 53
+      },
+      "3": {
+        "label": "Researcher \u2013 Research \u2013 Meet",
+        "terms": [
+          "researcher",
+          "research",
+          "meet"
+        ],
+        "count": 44
+      },
+      "4": {
+        "label": "Object \u2013 Audio \u2013 Interaction",
+        "terms": [
+          "object",
+          "audio",
+          "interaction"
+        ],
+        "count": 89
+      },
+      "5": {
+        "label": "Teacher \u2013 Coaching \u2013 Training",
+        "terms": [
+          "teacher",
+          "coaching",
+          "training"
+        ],
+        "count": 68
+      },
+      "6": {
+        "label": "Personality \u2013 Agentic \u2013 LLM",
+        "terms": [
+          "personality",
+          "agentic",
+          "llm"
+        ],
+        "count": 52
+      },
+      "7": {
+        "label": "Family \u2013 Parenting \u2013 Indigenous",
+        "terms": [
+          "family",
+          "parenting",
+          "indigenous"
+        ],
+        "count": 31
+      },
+      "8": {
+        "label": "Feed \u2013 Silence \u2013 Experience",
+        "terms": [
+          "feed",
+          "silence",
+          "experience"
+        ],
+        "count": 43
+      },
+      "9": {
+        "label": "Later Life \u2013 Explanation \u2013 Robot",
+        "terms": [
+          "later life",
+          "explanation",
+          "robot"
+        ],
+        "count": 44
+      },
+      "10": {
+        "label": "Sensory \u2013 Olfactory \u2013 Experience",
+        "terms": [
+          "sensory",
+          "olfactory",
+          "experience"
+        ],
+        "count": 50
+      },
+      "11": {
+        "label": "Narrative \u2013 Literacy \u2013 Authoring",
+        "terms": [
+          "narrative",
+          "literacy",
+          "authoring"
+        ],
+        "count": 37
+      },
+      "12": {
+        "label": "Vehicle \u2013 Autonomous \u2013 Driver",
+        "terms": [
+          "vehicle",
+          "autonomous",
+          "driver"
+        ],
+        "count": 42
+      },
+      "13": {
+        "label": "Transparency \u2013 Contract \u2013 Governance",
+        "terms": [
+          "transparency",
+          "contract",
+          "governance"
+        ],
+        "count": 44
+      },
+      "14": {
+        "label": "Music \u2013 Hearing \u2013 DHH",
+        "terms": [
+          "music",
+          "hearing",
+          "dhh"
+        ],
+        "count": 27
+      },
+      "15": {
+        "label": "Security \u2013 User \u2013 Data",
+        "terms": [
+          "security",
+          "user",
+          "data"
+        ],
+        "count": 59
+      },
+      "16": {
+        "label": "Pattern \u2013 Wheelchair \u2013 People Visual",
+        "terms": [
+          "pattern",
+          "wheelchair",
+          "people visual"
+        ],
+        "count": 28
+      },
+      "17": {
+        "label": "Dementia \u2013 Cancer \u2013 Healthcare",
+        "terms": [
+          "dementia",
+          "cancer",
+          "healthcare"
+        ],
+        "count": 46
+      },
+      "18": {
+        "label": "News \u2013 Model \u2013 Fact",
+        "terms": [
+          "news",
+          "model",
+          "fact"
+        ],
+        "count": 103
+      },
+      "19": {
+        "label": "Augmented \u2013 Notification \u2013 Repair",
+        "terms": [
+          "augmented",
+          "notification",
+          "repair"
+        ],
+        "count": 45
+      },
+      "20": {
+        "label": "Speculative \u2013 Computer \u2013 Interaction",
+        "terms": [
+          "speculative",
+          "computer",
+          "interaction"
+        ],
+        "count": 56
+      },
+      "21": {
+        "label": "Visual \u2013 User \u2013 Self",
+        "terms": [
+          "visual",
+          "user",
+          "self"
+        ],
+        "count": 176
+      },
+      "22": {
+        "label": "Parent \u2013 Parental \u2013 Safety",
+        "terms": [
+          "parent",
+          "parental",
+          "safety"
+        ],
+        "count": 62
+      },
+      "23": {
+        "label": "Mixed \u2013 Pain \u2013 Gait",
+        "terms": [
+          "mixed",
+          "pain",
+          "gait"
+        ],
+        "count": 40
+      },
+      "24": {
+        "label": "Textile \u2013 Shape Changing \u2013 Toolkit",
+        "terms": [
+          "textile",
+          "shape changing",
+          "toolkit"
+        ],
+        "count": 32
+      },
+      "25": {
+        "label": "Trans \u2013 Violence \u2013 Drone",
+        "terms": [
+          "trans",
+          "violence",
+          "drone"
+        ],
+        "count": 18
+      },
+      "26": {
+        "label": "Chatbots \u2013 Companion \u2013 Mediated",
+        "terms": [
+          "chatbots",
+          "companion",
+          "mediated"
+        ],
+        "count": 55
+      },
+      "27": {
+        "label": "Extended \u2013 Social \u2013 Stretching",
+        "terms": [
+          "extended",
+          "social",
+          "stretching"
+        ],
+        "count": 24
+      },
+      "28": {
+        "label": "Device \u2013 Domestication \u2013 Glass",
+        "terms": [
+          "device",
+          "domestication",
+          "glass"
+        ],
+        "count": 22
+      },
+      "29": {
+        "label": "Fairness \u2013 Identity \u2013 Collaboration",
+        "terms": [
+          "fairness",
+          "identity",
+          "collaboration"
+        ],
+        "count": 138
+      },
+      "30": {
+        "label": "Energy \u2013 Code \u2013 Vibe",
+        "terms": [
+          "energy",
+          "code",
+          "vibe"
+        ],
+        "count": 24
+      },
+      "31": {
+        "label": "Noticing \u2013 Water \u2013 Everyday",
+        "terms": [
+          "noticing",
+          "water",
+          "everyday"
+        ],
+        "count": 26
+      },
+      "32": {
+        "label": "Online \u2013 Deepfake \u2013 Algorithmic",
+        "terms": [
+          "online",
+          "deepfake",
+          "algorithmic"
+        ],
+        "count": 47
+      },
+      "33": {
+        "label": "Avatar \u2013 Embodiment \u2013 Self",
+        "terms": [
+          "avatar",
+          "embodiment",
+          "self"
+        ],
+        "count": 25
+      },
+      "34": {
+        "label": "Heritage \u2013 Cultural \u2013 Editing",
+        "terms": [
+          "heritage",
+          "cultural",
+          "editing"
+        ],
+        "count": 45
+      },
+      "35": {
+        "label": "Exploration \u2013 Chart \u2013 Notebook",
+        "terms": [
+          "exploration",
+          "chart",
+          "notebook"
+        ],
+        "count": 21
+      },
+      "36": {
+        "label": "Motion \u2013 Visual \u2013 Free Form",
+        "terms": [
+          "motion",
+          "visual",
+          "free form"
+        ],
+        "count": 15
+      },
+      "37": {
+        "label": "Acoustic \u2013 Emotional \u2013 Regulation",
+        "terms": [
+          "acoustic",
+          "emotional",
+          "regulation"
+        ],
+        "count": 21
+      },
+      "38": {
+        "label": "Synthetic \u2013 Teacher \u2013 Lived Experience",
+        "terms": [
+          "synthetic",
+          "teacher",
+          "lived experience"
+        ],
+        "count": 15
+      },
+      "39": {
+        "label": "Low \u2013 Accessible \u2013 People",
+        "terms": [
+          "low",
+          "accessible",
+          "people"
+        ],
+        "count": 38
+      },
+      "40": {
+        "label": "Feedback \u2013 Vibrotactile \u2013 Haptics",
+        "terms": [
+          "feedback",
+          "vibrotactile",
+          "haptics"
+        ],
+        "count": 45
+      },
+      "41": {
+        "label": "Emotional \u2013 Adolescent \u2013 Support",
+        "terms": [
+          "emotional",
+          "adolescent",
+          "support"
+        ],
+        "count": 28
+      },
+      "42": {
+        "label": "Short Form \u2013 Diversity \u2013 Video",
+        "terms": [
+          "short form",
+          "diversity",
+          "video"
+        ],
+        "count": 59
+      },
+      "43": {
+        "label": "Digital \u2013 Apps \u2013 Menstrual",
+        "terms": [
+          "digital",
+          "apps",
+          "menstrual"
+        ],
+        "count": 47
+      },
+      "44": {
+        "label": "Immersive \u2013 Environment \u2013 Locomotion",
+        "terms": [
+          "immersive",
+          "environment",
+          "locomotion"
+        ],
+        "count": 51
+      },
+      "45": {
+        "label": "Explainable \u2013 Ideation \u2013 Explanation",
+        "terms": [
+          "explainable",
+          "ideation",
+          "explanation"
+        ],
+        "count": 30
+      },
+      "46": {
+        "label": "Money \u2013 Financial \u2013 Adult",
+        "terms": [
+          "money",
+          "financial",
+          "adult"
+        ],
+        "count": 17
+      },
+      "47": {
+        "label": "Web \u2013 Open Source \u2013 Browsing",
+        "terms": [
+          "web",
+          "open source",
+          "browsing"
+        ],
+        "count": 21
+      },
+      "48": {
+        "label": "Environmental \u2013 Participatory \u2013 Conflict",
+        "terms": [
+          "environmental",
+          "participatory",
+          "conflict"
+        ],
+        "count": 30
+      },
+      "49": {
+        "label": "Stimulation \u2013 Force \u2013 Electrotactile",
+        "terms": [
+          "stimulation",
+          "force",
+          "electrotactile"
+        ],
+        "count": 37
+      },
+      "50": {
+        "label": "Sleep \u2013 Breathing \u2013 Biofeedback",
+        "terms": [
+          "sleep",
+          "breathing",
+          "biofeedback"
+        ],
+        "count": 35
+      },
+      "51": {
+        "label": "Tracking \u2013 Visual \u2013 Error",
+        "terms": [
+          "tracking",
+          "visual",
+          "error"
+        ],
+        "count": 41
+      },
+      "52": {
+        "label": "Structure \u2013 Printed \u2013 FDM",
+        "terms": [
+          "structure",
+          "printed",
+          "fdm"
+        ],
+        "count": 32
+      },
+      "53": {
+        "label": "Clinical \u2013 Clinician \u2013 Advice",
+        "terms": [
+          "clinical",
+          "clinician",
+          "advice"
+        ],
+        "count": 46
+      },
+      "54": {
+        "label": "Comment \u2013 Vocabulary \u2013 Museum",
+        "terms": [
+          "comment",
+          "vocabulary",
+          "museum"
+        ],
+        "count": 49
+      },
+      "55": {
+        "label": "Creation \u2013 Trace \u2013 Cst",
+        "terms": [
+          "creation",
+          "trace",
+          "cst"
+        ],
+        "count": 26
+      },
+      "56": {
+        "label": "Personal \u2013 Self \u2013 Fitness",
+        "terms": [
+          "personal",
+          "self",
+          "fitness"
+        ],
+        "count": 25
+      },
+      "57": {
+        "label": "Voice \u2013 User \u2013 UX",
+        "terms": [
+          "voice",
+          "user",
+          "ux"
+        ],
+        "count": 17
+      },
+      "58": {
+        "label": "Decentralized \u2013 Protocol \u2013 Design",
+        "terms": [
+          "decentralized",
+          "protocol",
+          "design"
+        ],
+        "count": 15
+      },
+      "59": {
+        "label": "Mobile \u2013 Optimization \u2013 Disabled",
+        "terms": [
+          "mobile",
+          "optimization",
+          "disabled"
+        ],
+        "count": 48
+      }
+    }
+  },
+  "hierarchy": {
+    "0": {
+      "mid": 7,
+      "macro": 9
+    },
+    "1": {
+      "mid": 25,
+      "macro": 1
+    },
+    "2": {
+      "mid": 1,
+      "macro": 3
+    },
+    "3": {
+      "mid": 12,
+      "macro": 5
+    },
+    "4": {
+      "mid": 13,
+      "macro": 2
+    },
+    "5": {
+      "mid": 21,
+      "macro": 7
+    },
+    "6": {
+      "mid": 19,
+      "macro": 1
+    },
+    "7": {
+      "mid": 20,
+      "macro": 4
+    },
+    "8": {
+      "mid": 27,
+      "macro": 4
+    },
+    "9": {
+      "mid": 22,
+      "macro": 4
+    },
+    "10": {
+      "mid": 0,
+      "macro": 2
+    },
+    "11": {
+      "mid": 2,
+      "macro": 1
+    },
+    "12": {
+      "mid": 5,
+      "macro": 8
+    },
+    "13": {
+      "mid": 15,
+      "macro": 5
+    },
+    "14": {
+      "mid": 16,
+      "macro": 7
+    },
+    "15": {
+      "mid": 11,
+      "macro": 0
+    },
+    "16": {
+      "mid": 28,
+      "macro": 0
+    },
+    "17": {
+      "mid": 3,
+      "macro": 4
+    },
+    "18": {
+      "mid": 4,
+      "macro": 0
+    },
+    "19": {
+      "mid": 6,
+      "macro": 2
+    },
+    "20": {
+      "mid": 9,
+      "macro": 5
+    },
+    "21": {
+      "mid": 7,
+      "macro": 9
+    },
+    "22": {
+      "mid": 1,
+      "macro": 3
+    },
+    "23": {
+      "mid": 6,
+      "macro": 2
+    },
+    "24": {
+      "mid": 26,
+      "macro": 6
+    },
+    "25": {
+      "mid": 3,
+      "macro": 4
+    },
+    "26": {
+      "mid": 29,
+      "macro": 3
+    },
+    "27": {
+      "mid": 6,
+      "macro": 2
+    },
+    "28": {
+      "mid": 11,
+      "macro": 0
+    },
+    "29": {
+      "mid": 8,
+      "macro": 1
+    },
+    "30": {
+      "mid": 21,
+      "macro": 7
+    },
+    "31": {
+      "mid": 9,
+      "macro": 5
+    },
+    "32": {
+      "mid": 27,
+      "macro": 4
+    },
+    "33": {
+      "mid": 10,
+      "macro": 2
+    },
+    "34": {
+      "mid": 2,
+      "macro": 1
+    },
+    "35": {
+      "mid": 15,
+      "macro": 5
+    },
+    "36": {
+      "mid": 23,
+      "macro": 6
+    },
+    "37": {
+      "mid": 0,
+      "macro": 2
+    },
+    "38": {
+      "mid": 2,
+      "macro": 1
+    },
+    "39": {
+      "mid": 18,
+      "macro": 8
+    },
+    "40": {
+      "mid": 10,
+      "macro": 2
+    },
+    "41": {
+      "mid": 22,
+      "macro": 4
+    },
+    "42": {
+      "mid": 24,
+      "macro": 1
+    },
+    "43": {
+      "mid": 22,
+      "macro": 4
+    },
+    "44": {
+      "mid": 10,
+      "macro": 2
+    },
+    "45": {
+      "mid": 19,
+      "macro": 1
+    },
+    "46": {
+      "mid": 1,
+      "macro": 3
+    },
+    "47": {
+      "mid": 4,
+      "macro": 0
+    },
+    "48": {
+      "mid": 12,
+      "macro": 5
+    },
+    "49": {
+      "mid": 13,
+      "macro": 2
+    },
+    "50": {
+      "mid": 0,
+      "macro": 2
+    },
+    "51": {
+      "mid": 5,
+      "macro": 8
+    },
+    "52": {
+      "mid": 26,
+      "macro": 6
+    },
+    "53": {
+      "mid": 8,
+      "macro": 1
+    },
+    "54": {
+      "mid": 16,
+      "macro": 7
+    },
+    "55": {
+      "mid": 25,
+      "macro": 1
+    },
+    "56": {
+      "mid": 20,
+      "macro": 4
+    },
+    "57": {
+      "mid": 14,
+      "macro": 9
+    },
+    "58": {
+      "mid": 17,
+      "macro": 0
+    },
+    "59": {
+      "mid": 18,
+      "macro": 8
+    }
+  },
+  "topic_names": [
+    "Robotic \u2013 HRI \u2013 Expressive",
+    "Prompt \u2013 Writer \u2013 Text",
+    "Play \u2013 Gameplay \u2013 Toxic",
+    "Researcher \u2013 Research \u2013 Meet",
+    "Object \u2013 Audio \u2013 Interaction",
+    "Teacher \u2013 Coaching \u2013 Training",
+    "Personality \u2013 Agentic \u2013 LLM",
+    "Family \u2013 Parenting \u2013 Indigenous",
+    "Feed \u2013 Silence \u2013 Experience",
+    "Later Life \u2013 Explanation \u2013 Robot",
+    "Sensory \u2013 Olfactory \u2013 Experience",
+    "Narrative \u2013 Literacy \u2013 Authoring",
+    "Vehicle \u2013 Autonomous \u2013 Driver",
+    "Transparency \u2013 Contract \u2013 Governance",
+    "Music \u2013 Hearing \u2013 DHH",
+    "Security \u2013 User \u2013 Data",
+    "Pattern \u2013 Wheelchair \u2013 People Visual",
+    "Dementia \u2013 Cancer \u2013 Healthcare",
+    "News \u2013 Model \u2013 Fact",
+    "Augmented \u2013 Notification \u2013 Repair",
+    "Speculative \u2013 Computer \u2013 Interaction",
+    "Visual \u2013 User \u2013 Self",
+    "Parent \u2013 Parental \u2013 Safety",
+    "Mixed \u2013 Pain \u2013 Gait",
+    "Textile \u2013 Shape Changing \u2013 Toolkit",
+    "Trans \u2013 Violence \u2013 Drone",
+    "Chatbots \u2013 Companion \u2013 Mediated",
+    "Extended \u2013 Social \u2013 Stretching",
+    "Device \u2013 Domestication \u2013 Glass",
+    "Fairness \u2013 Identity \u2013 Collaboration",
+    "Energy \u2013 Code \u2013 Vibe",
+    "Noticing \u2013 Water \u2013 Everyday",
+    "Online \u2013 Deepfake \u2013 Algorithmic",
+    "Avatar \u2013 Embodiment \u2013 Self",
+    "Heritage \u2013 Cultural \u2013 Editing",
+    "Exploration \u2013 Chart \u2013 Notebook",
+    "Motion \u2013 Visual \u2013 Free Form",
+    "Acoustic \u2013 Emotional \u2013 Regulation",
+    "Synthetic \u2013 Teacher \u2013 Lived Experience",
+    "Low \u2013 Accessible \u2013 People",
+    "Feedback \u2013 Vibrotactile \u2013 Haptics",
+    "Emotional \u2013 Adolescent \u2013 Support",
+    "Short Form \u2013 Diversity \u2013 Video",
+    "Digital \u2013 Apps \u2013 Menstrual",
+    "Immersive \u2013 Environment \u2013 Locomotion",
+    "Explainable \u2013 Ideation \u2013 Explanation",
+    "Money \u2013 Financial \u2013 Adult",
+    "Web \u2013 Open Source \u2013 Browsing",
+    "Environmental \u2013 Participatory \u2013 Conflict",
+    "Stimulation \u2013 Force \u2013 Electrotactile",
+    "Sleep \u2013 Breathing \u2013 Biofeedback",
+    "Tracking \u2013 Visual \u2013 Error",
+    "Structure \u2013 Printed \u2013 FDM",
+    "Clinical \u2013 Clinician \u2013 Advice",
+    "Comment \u2013 Vocabulary \u2013 Museum",
+    "Creation \u2013 Trace \u2013 Cst",
+    "Personal \u2013 Self \u2013 Fitness",
+    "Voice \u2013 User \u2013 UX",
+    "Decentralized \u2013 Protocol \u2013 Design",
+    "Mobile \u2013 Optimization \u2013 Disabled"
+  ]
+}

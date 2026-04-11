@@ -1,11 +1,17 @@
-playwright==1.52.0
-anthropic>=0.49.0
-pyyaml>=6.0
-python-dotenv>=1.0
 streamlit>=1.45.0
+streamlit-aggrid>=1.1.0
 altair>=5.5.0
-icalendar>=6.1.0
 pandas>=2.2.0
+numpy>=1.26.0
+icalendar>=6.1.0
+sentence-transformers>=3.0.0
 scikit-learn>=1.6.0
-umap-learn>=0.5.7
-hdbscan>=0.8.40
+nltk>=3.9.0
+
+# Pipeline-only (not needed for deployed app)
+# playwright==1.52.0
+# anthropic>=0.49.0
+# python-dotenv>=1.0
+# pyyaml>=6.0
+# umap-learn>=0.5.7
+# hdbscan>=0.8.40

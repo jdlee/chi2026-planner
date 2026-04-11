@@ -1,1 +1,19 @@
 .env
+__pycache__/
+*.pyc
+.DS_Store
+
+# Scraper/pipeline intermediate files
+data/abstracts_chunk_*.json
+data/chi2026_raw.json
+data/chi2026_classified.json
+data/awards.json
+data/themes.json
+data/selection.json
+
+# Large embedding caches (regenerated on first run)
+data/vocab_embeddings.npy
+data/vocab_words.json
+
+# Test results
+usability_test_results/
