@@ -564,7 +564,6 @@ def main():
                 with col_clear:
                     if st.button("Clear", key="clear_sankey"):
                         del st.session_state["sankey_filter"]
-                        st.rerun()
 
             st.caption("Click a topic to filter the table.")
 
@@ -599,7 +598,6 @@ def main():
                                 del st.session_state["sankey_filter"]
                             else:
                                 st.session_state["sankey_filter"] = ("macro", label)
-                            st.rerun()
 
             # --- Mid topics (show children of active macro, or all) ---
             st.markdown(
@@ -680,7 +678,6 @@ def main():
                                     del st.session_state["sankey_filter"]
                                 else:
                                     st.session_state["sankey_filter"] = ("mid", mid_label)
-                                st.rerun()
 
             # --- Micro topics (show if mid is selected) ---
             if active_level in ("mid", "fine"):
@@ -731,7 +728,6 @@ def main():
                                             del st.session_state["sankey_filter"]
                                         else:
                                             st.session_state["sankey_filter"] = ("fine", fine_label)
-                                        st.rerun()
 
             st.caption(
                 f"{len(macro_topics_data) - 1} macro  /  "
