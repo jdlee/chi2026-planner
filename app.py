@@ -1012,6 +1012,9 @@ def main():
         f"**Papers** &nbsp;&middot;&nbsp; {len(grid_df)}"
     )
 
+    # Build a stable key that changes when any filter changes (prevents stale selection reruns)
+    table_key = f"paper_table_{len(grid_df)}"
+
     event = st.dataframe(
         grid_df,
         column_config=col_config,
@@ -1020,7 +1023,7 @@ def main():
         hide_index=True,
         on_select="rerun",
         selection_mode="multi-row",
-        key=f"paper_table_{'search' if has_search else 'default'}",
+        key=table_key,
     )
 
     # Sync selections back to session state (merge, don't replace)
