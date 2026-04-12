@@ -645,7 +645,7 @@ def main():
             key="hierarchy_chart",
         )
 
-        # Process click events
+        # Process click events — only act if selection changed since last processed
         if event and event.selection and "node_sel" in event.selection:
             sel = event.selection["node_sel"]
             if isinstance(sel, list) and sel:
@@ -658,12 +658,15 @@ def main():
             else:
                 level = label = None
             if level and label:
-                new_filter = (level, label)
-                if st.session_state.get("sankey_filter") == new_filter:
-                    del st.session_state["sankey_filter"]
-                else:
-                    st.session_state["sankey_filter"] = new_filter
-                st.rerun()
+                clicked = (level, label)
+                last_click = st.session_state.get("_last_hierarchy_click")
+                if clicked != last_click:
+                    st.session_state["_last_hierarchy_click"] = clicked
+                    if st.session_state.get("sankey_filter") == clicked:
+                        del st.session_state["sankey_filter"]
+                    else:
+                        st.session_state["sankey_filter"] = clicked
+                    st.rerun()
 
         # Show active filter with clear button
         if "sankey_filter" in st.session_state:
@@ -674,6 +677,7 @@ def main():
             with col_clear:
                 if st.button("Clear filter", key="clear_sankey"):
                     del st.session_state["sankey_filter"]
+                    st.session_state.pop("_last_hierarchy_click", None)
                     st.rerun()
 
         st.caption(
