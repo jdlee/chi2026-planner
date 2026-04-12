@@ -572,163 +572,125 @@ def main():
 
     # --- Topic Hierarchy (clickable text chart) ---
     # Keep expander open if user has interacted with topic selection
+    # --- Topic Hierarchy (clickable text via native buttons) ---
+    # CSS to make tertiary buttons look like plain clickable text
+    st.markdown("""
+    <style>
+    .topic-col button[kind="tertiary"] {
+        font-size: 0.8125rem !important;
+        padding: 1px 0 !important;
+        min-height: 0 !important;
+        line-height: 1.3 !important;
+        text-align: left !important;
+        justify-content: flex-start !important;
+    }
+    .topic-col button[kind="tertiary"] p {
+        font-size: 0.8125rem !important;
+    }
+    .topic-col-macro button[kind="tertiary"] {
+        font-size: 0.875rem !important;
+        text-align: right !important;
+        justify-content: flex-end !important;
+    }
+    .topic-col-macro button[kind="tertiary"] p {
+        font-size: 0.875rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     _hierarchy_open = "sankey_filter" in st.session_state
     with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
         if topics and hierarchy:
-            import streamlit.components.v1 as components
-
-            nodes_df, _links_df = build_hierarchy_chart_data(topics, hierarchy)
-            nodes_df = nodes_df.copy()
-            nodes_df["mid_y"] = (nodes_df["y"] + nodes_df["y2"]) / 2
-            nodes_df["display_label"] = (
-                nodes_df["label"] + " (" + nodes_df["count"].astype(str) + ")"
-            )
-            y_max = nodes_df["y2"].max()
-
             active_filter = st.session_state.get("sankey_filter")
-            active_level = active_filter[0] if active_filter else None
-            active_label = active_filter[1] if active_filter else None
 
-            # Compute highlighting
-            if active_filter:
-                al, ab = active_filter
-                if al == "macro":
-                    nodes_df["hl"] = nodes_df["parent_macro"] == ab
-                elif al == "mid":
-                    mr = nodes_df.loc[(nodes_df["level"] == "mid") & (nodes_df["label"] == ab)]
-                    pm = mr.iloc[0]["parent_macro"] if len(mr) else ""
-                    nodes_df["hl"] = (
-                        (nodes_df["parent_mid"] == ab) |
-                        ((nodes_df["level"] == "macro") & (nodes_df["label"] == pm))
-                    )
-                elif al == "fine":
-                    fr = nodes_df.loc[(nodes_df["level"] == "fine") & (nodes_df["label"] == ab)]
-                    if len(fr):
-                        nodes_df["hl"] = (
-                            ((nodes_df["level"] == "fine") & (nodes_df["label"] == ab)) |
-                            ((nodes_df["level"] == "mid") & (nodes_df["label"] == fr.iloc[0]["parent_mid"])) |
-                            ((nodes_df["level"] == "macro") & (nodes_df["label"] == fr.iloc[0]["parent_macro"]))
-                        )
-                    else:
-                        nodes_df["hl"] = True
-                else:
-                    nodes_df["hl"] = True
-            else:
-                nodes_df["hl"] = True
-
-            # Darken colors
-            _dc = {}
-            def _dk(s):
-                if s not in _dc:
-                    p = s.replace("rgba(", "").replace(")", "").split(",")
-                    _dc[s] = f"rgb({max(0,int(p[0])-100)},{max(0,int(p[1])-100)},{max(0,int(p[2])-100)})"
-                return _dc[s]
-            nodes_df["dark"] = nodes_df["color"].map(_dk)
-
-            # Build HTML for 3-column clickable text layout
-            col_x = {"macro": 0, "mid": 1, "fine": 2}
-            col_headers = {"macro": "Macro", "mid": "Mid", "fine": "Micro"}
-
-            # Static HTML chart (no click handlers, no JS)
-            items_html = []
-            for _, r in nodes_df.iterrows():
-                color = r["dark"] if r["hl"] else "rgb(190,190,190)"
-                weight = "600" if r["hl"] else "400"
-                size = "12px" if r["hl"] else "10px"
-                y_pct = (r["mid_y"] / y_max) * 100 if y_max > 0 else 0
-                col = col_x[r["level"]]
-                align = "right" if col == 0 else ("left" if col == 2 else "center")
-                transform = "-100%" if col == 0 else ("0%" if col == 2 else "-50%")
-                pad_r = "8px" if col == 0 else "0"
-                pad_l = "8px" if col == 2 else "0"
-                col_pct = [16.67, 50, 83.33][col]
-                display = r["display_label"].replace("&", "&amp;").replace("<", "&lt;")
-                items_html.append(
-                    f'<div style="position:absolute;top:{y_pct:.2f}%;left:{col_pct}%;'
-                    f'color:{color};font-weight:{weight};font-size:{size};'
-                    f'transform:translate({transform},-50%);white-space:nowrap;'
-                    f'padding-right:{pad_r};padding-left:{pad_l}">{display}</div>'
-                )
-
-            html = f"""
-            <div style="position:relative;width:100%;height:1100px;
-                        font-family:-apple-system,'Helvetica Neue',sans-serif">
-              <div style="display:flex;font-size:13px;font-weight:600;
-                          color:#86868b;padding-bottom:8px">
-                <span style="flex:1;text-align:center">Macro</span>
-                <span style="flex:1;text-align:center">Mid</span>
-                <span style="flex:1;text-align:center">Micro</span>
-              </div>
-              <div style="position:relative;width:100%;height:1060px">
-                {''.join(items_html)}
-              </div>
-            </div>
-            """
-
-            import streamlit.components.v1 as components
-            components.html(html, height=1120, scrolling=False)
-
-            # --- Topic filter via pills (native widget, no rerun loops) ---
             macro_topics_data = topics.get("macro", {})
             mid_topics_data = topics.get("mid", {})
             fine_topics_data = topics.get("fine", {})
 
-            macro_labels = sorted(
-                [info["label"] for k, info in macro_topics_data.items() if k != "-1"],
-                key=lambda l: next(
-                    (v["count"] for v in macro_topics_data.values() if v.get("label") == l), 0
-                ), reverse=True,
+            # Build parent maps
+            mid_parent = {}
+            fine_parent = {}
+            for fine_id, links in hierarchy.items():
+                fine_parent[fine_id] = str(links["mid"])
+                mid_parent[str(links["mid"])] = str(links["macro"])
+
+            # Ordered lists
+            macro_order = sorted(
+                [k for k in macro_topics_data if k != "-1"],
+                key=lambda k: macro_topics_data[k]["count"], reverse=True,
             )
+            mid_order = []
+            for macro_id in macro_order:
+                mid_order.extend(sorted(
+                    [m for m, p in mid_parent.items() if p == macro_id],
+                    key=lambda m: mid_topics_data.get(m, {}).get("count", 0), reverse=True,
+                ))
+            fine_order = []
+            for mid_id in mid_order:
+                fine_order.extend(sorted(
+                    [f for f, p in fine_parent.items() if p == mid_id],
+                    key=lambda f: fine_topics_data.get(f, {}).get("count", 0), reverse=True,
+                ))
 
-            sel_macro = st.pills(
-                "Macro", macro_labels, key="pills_macro",
-                default=active_label if active_level == "macro" else None,
-            )
+            # Three columns
+            col_macro, col_mid, col_fine = st.columns(3)
 
-            if sel_macro:
-                st.session_state["sankey_filter"] = ("macro", sel_macro)
-
-                # Show mid pills for selected macro
-                macro_id = next(
-                    (k for k, v in macro_topics_data.items() if v.get("label") == sel_macro), None
+            with col_macro:
+                st.markdown(
+                    '<p class="sidebar-label">Macro</p>',
+                    unsafe_allow_html=True,
                 )
-                if macro_id:
-                    mid_ids = sorted(set(
-                        str(links["mid"]) for fid, links in hierarchy.items()
-                        if str(links["macro"]) == macro_id
-                    ))
-                    mid_labels = sorted(
-                        [mid_topics_data[m]["label"] for m in mid_ids if m in mid_topics_data],
-                        key=lambda l: next(
-                            (v["count"] for v in mid_topics_data.values() if v.get("label") == l), 0
-                        ), reverse=True,
-                    )
-                    sel_mid = st.pills(
-                        "Mid", mid_labels, key="pills_mid",
-                        default=active_label if active_level in ("mid", "fine") else None,
-                    )
-                    if sel_mid:
-                        st.session_state["sankey_filter"] = ("mid", sel_mid)
+                st.markdown('<div class="topic-col topic-col-macro">', unsafe_allow_html=True)
+                for macro_id in macro_order:
+                    info = macro_topics_data[macro_id]
+                    label = info["label"]
+                    count = info["count"]
+                    is_active = active_filter == ("macro", label)
+                    btn_label = f"**{label} ({count})**" if is_active else f"{label} ({count})"
+                    if st.button(btn_label, key=f"t_macro_{macro_id}", type="tertiary"):
+                        if is_active:
+                            st.session_state.pop("sankey_filter", None)
+                        else:
+                            st.session_state["sankey_filter"] = ("macro", label)
+                st.markdown('</div>', unsafe_allow_html=True)
 
-                        # Show fine pills for selected mid
-                        mid_id = next(
-                            (k for k, v in mid_topics_data.items() if v.get("label") == sel_mid), None
-                        )
-                        if mid_id:
-                            fine_ids = sorted(
-                                [fid for fid, links in hierarchy.items() if str(links["mid"]) == mid_id],
-                                key=lambda f: fine_topics_data.get(f, {}).get("count", 0),
-                                reverse=True,
-                            )
-                            fine_labels = [fine_topics_data[f]["label"] for f in fine_ids if f in fine_topics_data]
-                            sel_fine = st.pills(
-                                "Micro", fine_labels, key="pills_fine",
-                                default=active_label if active_level == "fine" else None,
-                            )
-                            if sel_fine:
-                                st.session_state["sankey_filter"] = ("fine", sel_fine)
-            else:
-                st.session_state.pop("sankey_filter", None)
+            with col_mid:
+                st.markdown(
+                    '<p class="sidebar-label">Mid</p>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown('<div class="topic-col">', unsafe_allow_html=True)
+                for mid_id in mid_order:
+                    info = mid_topics_data.get(mid_id, {})
+                    label = info.get("label", "")
+                    count = info.get("count", 0)
+                    is_active = active_filter == ("mid", label)
+                    btn_label = f"**{label} ({count})**" if is_active else f"{label} ({count})"
+                    if st.button(btn_label, key=f"t_mid_{mid_id}", type="tertiary"):
+                        if is_active:
+                            st.session_state.pop("sankey_filter", None)
+                        else:
+                            st.session_state["sankey_filter"] = ("mid", label)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            with col_fine:
+                st.markdown(
+                    '<p class="sidebar-label">Micro</p>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown('<div class="topic-col">', unsafe_allow_html=True)
+                for fine_id in fine_order:
+                    info = fine_topics_data.get(fine_id, {})
+                    label = info.get("label", "")
+                    count = info.get("count", 0)
+                    is_active = active_filter == ("fine", label)
+                    btn_label = f"**{label} ({count})**" if is_active else f"{label} ({count})"
+                    if st.button(btn_label, key=f"t_fine_{fine_id}", type="tertiary"):
+                        if is_active:
+                            st.session_state.pop("sankey_filter", None)
+                        else:
+                            st.session_state["sankey_filter"] = ("fine", label)
+                st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
