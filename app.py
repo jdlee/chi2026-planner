@@ -586,6 +586,8 @@ def main():
             y_max = nodes_df["y2"].max()
 
             active_filter = st.session_state.get("sankey_filter")
+            active_level = active_filter[0] if active_filter else None
+            active_label = active_filter[1] if active_filter else None
 
             # Compute highlighting
             if active_filter:
