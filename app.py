@@ -572,125 +572,128 @@ def main():
 
     # --- Topic Hierarchy (clickable text chart) ---
     # Keep expander open if user has interacted with topic selection
-    # --- Topic Hierarchy (clickable text via native buttons) ---
-    # CSS to make tertiary buttons look like plain clickable text
-    st.markdown("""
-    <style>
-    .topic-col button[kind="tertiary"] {
-        font-size: 0.8125rem !important;
-        padding: 1px 0 !important;
-        min-height: 0 !important;
-        line-height: 1.3 !important;
-        text-align: left !important;
-        justify-content: flex-start !important;
-    }
-    .topic-col button[kind="tertiary"] p {
-        font-size: 0.8125rem !important;
-    }
-    .topic-col-macro button[kind="tertiary"] {
-        font-size: 0.875rem !important;
-        text-align: right !important;
-        justify-content: flex-end !important;
-    }
-    .topic-col-macro button[kind="tertiary"] p {
-        font-size: 0.875rem !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
+    # --- Topic Hierarchy (ECharts Sankey) ---
     _hierarchy_open = "sankey_filter" in st.session_state
     with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
         if topics and hierarchy:
-            active_filter = st.session_state.get("sankey_filter")
+            from streamlit_echarts import st_echarts
 
             macro_topics_data = topics.get("macro", {})
             mid_topics_data = topics.get("mid", {})
             fine_topics_data = topics.get("fine", {})
 
-            # Build parent maps
-            mid_parent = {}
-            fine_parent = {}
-            for fine_id, links in hierarchy.items():
-                fine_parent[fine_id] = str(links["mid"])
-                mid_parent[str(links["mid"])] = str(links["macro"])
+            # Build Sankey nodes and links
+            sankey_nodes = []
+            sankey_links = []
 
-            # Ordered lists
-            macro_order = sorted(
-                [k for k in macro_topics_data if k != "-1"],
-                key=lambda k: macro_topics_data[k]["count"], reverse=True,
+            # Macro nodes
+            for k, v in macro_topics_data.items():
+                if k == "-1":
+                    continue
+                color = MACRO_COLORS[int(k) % len(MACRO_COLORS)]
+                sankey_nodes.append({
+                    "name": v["label"],
+                    "itemStyle": {"color": color, "borderColor": color},
+                    "depth": 0,
+                })
+
+            # Mid nodes
+            mid_to_macro_id = {}
+            for fid, h in hierarchy.items():
+                mid_to_macro_id[str(h["mid"])] = str(h["macro"])
+            for k, v in mid_topics_data.items():
+                macro_id = mid_to_macro_id.get(k, "0")
+                color = MACRO_COLORS[int(macro_id) % len(MACRO_COLORS)]
+                sankey_nodes.append({
+                    "name": v.get("label", ""),
+                    "itemStyle": {"color": color, "borderColor": color},
+                    "depth": 1,
+                })
+
+            # Fine nodes
+            for k, v in fine_topics_data.items():
+                macro_id = str(hierarchy.get(k, {}).get("macro", 0))
+                color = MACRO_COLORS[int(macro_id) % len(MACRO_COLORS)]
+                sankey_nodes.append({
+                    "name": v.get("label", ""),
+                    "itemStyle": {"color": color, "borderColor": color},
+                    "depth": 2,
+                })
+
+            # Links: macro → mid (aggregate fine counts)
+            mid_agg = {}
+            for fid, h in hierarchy.items():
+                macro_id = str(h["macro"])
+                mid_id = str(h["mid"])
+                cnt = fine_topics_data.get(fid, {}).get("count", 0)
+                key = (macro_id, mid_id)
+                mid_agg[key] = mid_agg.get(key, 0) + cnt
+
+            for (macro_id, mid_id), cnt in mid_agg.items():
+                src = macro_topics_data.get(macro_id, {}).get("label", "")
+                tgt = mid_topics_data.get(mid_id, {}).get("label", "")
+                if src and tgt and cnt > 0:
+                    sankey_links.append({"source": src, "target": tgt, "value": cnt})
+
+            # Links: mid → fine
+            for fid, h in hierarchy.items():
+                mid_id = str(h["mid"])
+                cnt = fine_topics_data.get(fid, {}).get("count", 0)
+                src = mid_topics_data.get(mid_id, {}).get("label", "")
+                tgt = fine_topics_data.get(fid, {}).get("label", "")
+                if src and tgt and cnt > 0:
+                    sankey_links.append({"source": src, "target": tgt, "value": cnt})
+
+            option = {
+                "tooltip": {"trigger": "item", "triggerOn": "mousemove"},
+                "series": [{
+                    "type": "sankey",
+                    "layout": "none",
+                    "emphasis": {"focus": "adjacency"},
+                    "nodeAlign": "justify",
+                    "orient": "horizontal",
+                    "nodeGap": 4,
+                    "nodeWidth": 12,
+                    "layoutIterations": 0,
+                    "label": {
+                        "show": True,
+                        "fontSize": 10,
+                        "fontFamily": "-apple-system, 'Helvetica Neue', sans-serif",
+                    },
+                    "lineStyle": {"color": "source", "opacity": 0.3},
+                    "data": sankey_nodes,
+                    "links": sankey_links,
+                }],
+            }
+
+            clicked = st_echarts(
+                option, height="700px",
+                events={"click": "function(params) { return params.name; }"},
+                key="sankey_chart",
             )
-            mid_order = []
-            for macro_id in macro_order:
-                mid_order.extend(sorted(
-                    [m for m, p in mid_parent.items() if p == macro_id],
-                    key=lambda m: mid_topics_data.get(m, {}).get("count", 0), reverse=True,
-                ))
-            fine_order = []
-            for mid_id in mid_order:
-                fine_order.extend(sorted(
-                    [f for f, p in fine_parent.items() if p == mid_id],
-                    key=lambda f: fine_topics_data.get(f, {}).get("count", 0), reverse=True,
-                ))
 
-            # Three columns
-            col_macro, col_mid, col_fine = st.columns(3)
+            # Process click event from ECharts
+            if clicked and isinstance(clicked, str):
+                # Determine which level this label belongs to
+                macro_labels = {v["label"] for k, v in macro_topics_data.items() if k != "-1"}
+                mid_labels = {v.get("label", "") for v in mid_topics_data.values()}
+                fine_labels = {v.get("label", "") for v in fine_topics_data.values()}
 
-            with col_macro:
-                st.markdown(
-                    '<p class="sidebar-label">Macro</p>',
-                    unsafe_allow_html=True,
-                )
-                st.markdown('<div class="topic-col topic-col-macro">', unsafe_allow_html=True)
-                for macro_id in macro_order:
-                    info = macro_topics_data[macro_id]
-                    label = info["label"]
-                    count = info["count"]
-                    is_active = active_filter == ("macro", label)
-                    btn_label = f"**{label} ({count})**" if is_active else f"{label} ({count})"
-                    if st.button(btn_label, key=f"t_macro_{macro_id}", type="tertiary"):
-                        if is_active:
-                            st.session_state.pop("sankey_filter", None)
-                        else:
-                            st.session_state["sankey_filter"] = ("macro", label)
-                st.markdown('</div>', unsafe_allow_html=True)
+                if clicked in macro_labels:
+                    level = "macro"
+                elif clicked in mid_labels:
+                    level = "mid"
+                elif clicked in fine_labels:
+                    level = "fine"
+                else:
+                    level = None
 
-            with col_mid:
-                st.markdown(
-                    '<p class="sidebar-label">Mid</p>',
-                    unsafe_allow_html=True,
-                )
-                st.markdown('<div class="topic-col">', unsafe_allow_html=True)
-                for mid_id in mid_order:
-                    info = mid_topics_data.get(mid_id, {})
-                    label = info.get("label", "")
-                    count = info.get("count", 0)
-                    is_active = active_filter == ("mid", label)
-                    btn_label = f"**{label} ({count})**" if is_active else f"{label} ({count})"
-                    if st.button(btn_label, key=f"t_mid_{mid_id}", type="tertiary"):
-                        if is_active:
-                            st.session_state.pop("sankey_filter", None)
-                        else:
-                            st.session_state["sankey_filter"] = ("mid", label)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-            with col_fine:
-                st.markdown(
-                    '<p class="sidebar-label">Micro</p>',
-                    unsafe_allow_html=True,
-                )
-                st.markdown('<div class="topic-col">', unsafe_allow_html=True)
-                for fine_id in fine_order:
-                    info = fine_topics_data.get(fine_id, {})
-                    label = info.get("label", "")
-                    count = info.get("count", 0)
-                    is_active = active_filter == ("fine", label)
-                    btn_label = f"**{label} ({count})**" if is_active else f"{label} ({count})"
-                    if st.button(btn_label, key=f"t_fine_{fine_id}", type="tertiary"):
-                        if is_active:
-                            st.session_state.pop("sankey_filter", None)
-                        else:
-                            st.session_state["sankey_filter"] = ("fine", label)
-                st.markdown('</div>', unsafe_allow_html=True)
+                if level:
+                    current = st.session_state.get("sankey_filter")
+                    if current == (level, clicked):
+                        st.session_state.pop("sankey_filter", None)
+                    else:
+                        st.session_state["sankey_filter"] = (level, clicked)
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
