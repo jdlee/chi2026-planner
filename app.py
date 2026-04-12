@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 
-import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -576,74 +575,147 @@ def main():
     _hierarchy_open = "sankey_filter" in st.session_state
     with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
         if topics and hierarchy:
-            # Build chart data ONCE — never changes, so chart never re-renders
+            import streamlit.components.v1 as components
+
             nodes_df, _links_df = build_hierarchy_chart_data(topics, hierarchy)
             nodes_df = nodes_df.copy()
-
             nodes_df["mid_y"] = (nodes_df["y"] + nodes_df["y2"]) / 2
             nodes_df["display_label"] = (
-                nodes_df["label"] + "  (" + nodes_df["count"].astype(str) + ")"
-            )
-            nodes_df["col_label"] = nodes_df["level"].map(
-                {"macro": "Macro", "mid": "Mid", "fine": "Micro"}
+                nodes_df["label"] + " (" + nodes_df["count"].astype(str) + ")"
             )
             y_max = nodes_df["y2"].max()
 
-            # Constant color per node (never changes with filter)
-            _dark_cache = {}
-            def _darken(rgba_str):
-                if rgba_str not in _dark_cache:
-                    parts = rgba_str.replace("rgba(", "").replace(")", "").split(",")
-                    r, g, b = [max(0, int(p.strip()) - 100) for p in parts[:3]]
-                    _dark_cache[rgba_str] = f"rgb({r},{g},{b})"
-                return _dark_cache[rgba_str]
-            nodes_df["text_color"] = nodes_df["color"].map(_darken)
+            active_filter = st.session_state.get("sankey_filter")
 
-            # Selection param — Altair handles highlighting via opacity condition
-            sel = alt.selection_point(name="topic_sel", fields=["level", "label"])
-
-            chart = alt.Chart(nodes_df).mark_text(
-                cursor="pointer", baseline="middle", fontSize=11,
-                font="-apple-system, 'Helvetica Neue', sans-serif",
-            ).encode(
-                x=alt.X("col_label:N", title=None,
-                         sort=["Macro", "Mid", "Micro"],
-                         axis=alt.Axis(orient="top", labelFontSize=13,
-                                       labelFontWeight=600, labelPadding=12,
-                                       labelAngle=0, labelColor="#86868b",
-                                       domain=False, ticks=False)),
-                y=alt.Y("mid_y:Q", axis=None,
-                         scale=alt.Scale(domain=[0, y_max], reverse=True)),
-                text="display_label:N",
-                color=alt.Color("text_color:N", scale=None, legend=None),
-                opacity=alt.condition(sel, alt.value(1.0), alt.value(0.4)),
-            ).add_params(sel).properties(width=900, height=1100)
-
-            # FIXED key — chart data never changes, so component is never recreated
-            event = st.altair_chart(
-                chart, use_container_width=True,
-                on_select="rerun", selection_mode=["topic_sel"],
-                key="hierarchy_chart",
-            )
-
-            # Process click
-            if event and event.selection and "topic_sel" in event.selection:
-                sel_data = event.selection["topic_sel"]
-                clicked = None
-                if isinstance(sel_data, list) and sel_data:
-                    pt = sel_data[0]
-                    clicked = (pt.get("level"), pt.get("label"))
-                elif isinstance(sel_data, dict) and sel_data.get("level"):
-                    clicked = (sel_data["level"][0], sel_data["label"][0])
-
-                if clicked and clicked[0] and clicked[1]:
-                    current = st.session_state.get("sankey_filter")
-                    if current == clicked:
-                        st.session_state.pop("sankey_filter", None)
+            # Compute highlighting
+            if active_filter:
+                al, ab = active_filter
+                if al == "macro":
+                    nodes_df["hl"] = nodes_df["parent_macro"] == ab
+                elif al == "mid":
+                    mr = nodes_df.loc[(nodes_df["level"] == "mid") & (nodes_df["label"] == ab)]
+                    pm = mr.iloc[0]["parent_macro"] if len(mr) else ""
+                    nodes_df["hl"] = (
+                        (nodes_df["parent_mid"] == ab) |
+                        ((nodes_df["level"] == "macro") & (nodes_df["label"] == pm))
+                    )
+                elif al == "fine":
+                    fr = nodes_df.loc[(nodes_df["level"] == "fine") & (nodes_df["label"] == ab)]
+                    if len(fr):
+                        nodes_df["hl"] = (
+                            ((nodes_df["level"] == "fine") & (nodes_df["label"] == ab)) |
+                            ((nodes_df["level"] == "mid") & (nodes_df["label"] == fr.iloc[0]["parent_mid"])) |
+                            ((nodes_df["level"] == "macro") & (nodes_df["label"] == fr.iloc[0]["parent_macro"]))
+                        )
                     else:
-                        st.session_state["sankey_filter"] = clicked
+                        nodes_df["hl"] = True
+                else:
+                    nodes_df["hl"] = True
+            else:
+                nodes_df["hl"] = True
 
-            st.caption("Click a topic to filter the table.")
+            # Darken colors
+            _dc = {}
+            def _dk(s):
+                if s not in _dc:
+                    p = s.replace("rgba(", "").replace(")", "").split(",")
+                    _dc[s] = f"rgb({max(0,int(p[0])-100)},{max(0,int(p[1])-100)},{max(0,int(p[2])-100)})"
+                return _dc[s]
+            nodes_df["dark"] = nodes_df["color"].map(_dk)
+
+            # Build HTML for 3-column clickable text layout
+            col_x = {"macro": 0, "mid": 1, "fine": 2}
+            col_headers = {"macro": "Macro", "mid": "Mid", "fine": "Micro"}
+
+            items_js = []
+            for _, r in nodes_df.iterrows():
+                color = r["dark"] if r["hl"] else "rgb(190,190,190)"
+                weight = "600" if r["hl"] else "400"
+                size = "12px" if r["hl"] else "10px"
+                y_pct = (r["mid_y"] / y_max) * 100 if y_max > 0 else 0
+                col = col_x[r["level"]]
+                level = r["level"]
+                label = r["label"].replace("'", "\\'")
+                display = r["display_label"].replace("'", "\\'")
+                items_js.append(
+                    f"{{col:{col},y:{y_pct:.2f},color:'{color}',weight:'{weight}',"
+                    f"size:'{size}',level:'{level}',label:'{label}',display:'{display}'}}"
+                )
+
+            html = f"""
+            <style>
+              .th-wrap {{
+                position: relative; width: 100%; height: 1100px;
+                font-family: -apple-system, 'Helvetica Neue', sans-serif;
+              }}
+              .th-header {{
+                display: flex; font-size: 13px; font-weight: 600;
+                color: #86868b; padding-bottom: 8px;
+              }}
+              .th-header span {{ flex: 1; text-align: center; }}
+              .th-body {{ position: relative; width: 100%; height: 1060px; }}
+              .th-item {{
+                position: absolute; cursor: pointer; white-space: nowrap;
+                transition: opacity 0.15s;
+              }}
+              .th-item:hover {{ opacity: 1 !important; text-decoration: underline; }}
+            </style>
+            <div class="th-wrap">
+              <div class="th-header">
+                <span>Macro</span><span>Mid</span><span>Micro</span>
+              </div>
+              <div class="th-body" id="th-body"></div>
+            </div>
+            <script>
+              const items = [{','.join(items_js)}];
+              const body = document.getElementById('th-body');
+              const colPcts = [16.67, 50, 83.33]; // center of each third
+              const aligns = ['right', 'center', 'left'];
+              const offsets = ['-4px', '0', '4px'];
+
+              items.forEach(it => {{
+                const el = document.createElement('div');
+                el.className = 'th-item';
+                el.style.top = it.y + '%';
+                el.style.left = colPcts[it.col] + '%';
+                el.style.color = it.color;
+                el.style.fontWeight = it.weight;
+                el.style.fontSize = it.size;
+                el.style.transform = 'translate(' +
+                  (it.col === 0 ? '-100%' : it.col === 2 ? '0%' : '-50%') +
+                  ', -50%)';
+                el.style.paddingRight = it.col === 0 ? '8px' : '0';
+                el.style.paddingLeft = it.col === 2 ? '8px' : '0';
+                el.textContent = it.display;
+                el.onclick = () => {{
+                  // Post message to Streamlit via query params
+                  const url = new URL(window.parent.location);
+                  url.searchParams.set('topic_level', it.level);
+                  url.searchParams.set('topic_label', it.label);
+                  window.parent.history.replaceState(null, '', url);
+                  // Trigger Streamlit rerun
+                  window.parent.postMessage({{type: 'streamlit:rerun'}}, '*');
+                }};
+                body.appendChild(el);
+              }});
+            </script>
+            """
+
+            components.html(html, height=1120, scrolling=False)
+
+            # Read click from query params
+            params = st.query_params
+            clicked_level = params.get("topic_level")
+            clicked_label = params.get("topic_label")
+            if clicked_level and clicked_label:
+                # Clear query params
+                st.query_params.clear()
+                clicked = (clicked_level, clicked_label)
+                if active_filter == clicked:
+                    st.session_state.pop("sankey_filter", None)
+                else:
+                    st.session_state["sankey_filter"] = clicked
+                st.rerun()
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
