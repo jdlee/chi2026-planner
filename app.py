@@ -473,6 +473,16 @@ def main():
     }
     .sel-count.has-items { color: #1d1d1f; }
     .sel-count.empty { color: #d1d1d6; }
+    .sel-slot-label {
+        text-align: center;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: #86868b;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-top: -8px;
+        margin-bottom: -4px;
+    }
 
     /* Checkboxes — compact and centered */
     [data-testid="stSidebar"] .stCheckbox > label {
@@ -541,26 +551,35 @@ def main():
 
     st.title("CHI 2026 Planner")
 
+    # Active topic filter indicator (below title, matches expander header size)
+    _active = st.session_state.get("sankey_filter")
+    if _active:
+        col_f, col_c = st.columns([4, 1])
+        with col_f:
+            st.markdown(
+                f'<p style="font-size:0.9375rem;font-weight:600;color:#1d1d1f;'
+                f'margin:0;padding:0">'
+                f'Filtered by {_active[0]}: {_active[1]}</p>',
+                unsafe_allow_html=True,
+            )
+        with col_c:
+            if st.button("Clear", key="clear_filter_top", type="tertiary"):
+                st.session_state.pop("sankey_filter", None)
+                st.session_state.pop("_last_topic_click", None)
+
     papers, topic_names, topics, hierarchy = load_data()
     init_selection()
     themes = [{"name": t} for t in topic_names]
     min_relevance = 0.2
 
     # --- Topic Hierarchy (clickable text chart) ---
-    with st.expander("Topic Hierarchy", expanded=False):
+    # Keep expander open if user has interacted with topic selection
+    _hierarchy_open = "sankey_filter" in st.session_state or "_last_topic_click" in st.session_state
+    with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
         if topics and hierarchy:
             active_filter = st.session_state.get("sankey_filter")
             active_level = active_filter[0] if active_filter else None
             active_label = active_filter[1] if active_filter else None
-
-            # Active filter bar
-            if active_filter:
-                col_info, col_clear = st.columns([5, 1])
-                with col_info:
-                    st.info(f"Filtering by **{active_level}**: **{active_label}**")
-                with col_clear:
-                    if st.button("Clear", key="clear_sankey"):
-                        del st.session_state["sankey_filter"]
 
             nodes_df, _links_df = build_hierarchy_chart_data(topics, hierarchy)
             nodes_df = nodes_df.copy()
@@ -645,10 +664,11 @@ def main():
 
             event = st.altair_chart(
                 chart, use_container_width=True,
-                on_select="rerun", key=chart_key,
+                on_select="rerun", selection_mode=["topic_sel"],
+                key=chart_key,
             )
 
-            # Process click — only act when selection differs from current filter
+            # Process click — compare against last processed click to avoid loops
             if event and event.selection and "topic_sel" in event.selection:
                 sel_data = event.selection["topic_sel"]
                 clicked = None
@@ -658,11 +678,14 @@ def main():
                 elif isinstance(sel_data, dict) and sel_data.get("level"):
                     clicked = (sel_data["level"][0], sel_data["label"][0])
 
-                if clicked and clicked[0] and clicked[1] and clicked != active_filter:
+                last_click = st.session_state.get("_last_topic_click")
+                if clicked and clicked[0] and clicked[1] and clicked != last_click:
+                    st.session_state["_last_topic_click"] = clicked
                     if active_filter == clicked:
                         st.session_state.pop("sankey_filter", None)
                     else:
                         st.session_state["sankey_filter"] = clicked
+                    st.rerun()
 
             st.caption("Click a topic to filter the table.")
         else:
@@ -769,7 +792,7 @@ def main():
                         f'<div class="sel-count {cls}">{count}</div>',
                         unsafe_allow_html=True,
                     )
-                    st.markdown('<div class="slot-label">AM</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="sel-slot-label">AM</div>', unsafe_allow_html=True)
 
             sel_cols_pm = st.columns(len(day_info))
             for i, d in enumerate(day_info):
@@ -780,7 +803,7 @@ def main():
                         f'<div class="sel-count {cls}">{count}</div>',
                         unsafe_allow_html=True,
                     )
-                    st.markdown('<div class="slot-label">PM</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="sel-slot-label">PM</div>', unsafe_allow_html=True)
 
         col_save, col_clear = st.columns(2)
         with col_save:
