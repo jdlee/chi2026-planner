@@ -565,7 +565,6 @@ def main():
         with col_c:
             if st.button("Clear", key="clear_filter_top", type="tertiary"):
                 st.session_state.pop("sankey_filter", None)
-                st.session_state.pop("_last_topic_click", None)
 
     papers, topic_names, topics, hierarchy = load_data()
     init_selection()
@@ -574,13 +573,10 @@ def main():
 
     # --- Topic Hierarchy (clickable text chart) ---
     # Keep expander open if user has interacted with topic selection
-    _hierarchy_open = "sankey_filter" in st.session_state or "_last_topic_click" in st.session_state
+    _hierarchy_open = "sankey_filter" in st.session_state
     with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
         if topics and hierarchy:
-            active_filter = st.session_state.get("sankey_filter")
-            active_level = active_filter[0] if active_filter else None
-            active_label = active_filter[1] if active_filter else None
-
+            # Build chart data ONCE — never changes, so chart never re-renders
             nodes_df, _links_df = build_hierarchy_chart_data(topics, hierarchy)
             nodes_df = nodes_df.copy()
 
@@ -593,38 +589,7 @@ def main():
             )
             y_max = nodes_df["y2"].max()
 
-            # Highlighting
-            if active_filter:
-                if active_level == "macro":
-                    nodes_df["highlighted"] = nodes_df["parent_macro"] == active_label
-                elif active_level == "mid":
-                    mid_rows = nodes_df.loc[
-                        (nodes_df["level"] == "mid") & (nodes_df["label"] == active_label)
-                    ]
-                    pm = mid_rows.iloc[0]["parent_macro"] if len(mid_rows) else ""
-                    nodes_df["highlighted"] = (
-                        (nodes_df["parent_mid"] == active_label) |
-                        ((nodes_df["level"] == "macro") & (nodes_df["label"] == pm))
-                    )
-                elif active_level == "fine":
-                    fine_rows = nodes_df.loc[
-                        (nodes_df["level"] == "fine") & (nodes_df["label"] == active_label)
-                    ]
-                    if len(fine_rows):
-                        pm = fine_rows.iloc[0]["parent_mid"]
-                        pma = fine_rows.iloc[0]["parent_macro"]
-                        nodes_df["highlighted"] = (
-                            ((nodes_df["level"] == "fine") & (nodes_df["label"] == active_label)) |
-                            ((nodes_df["level"] == "mid") & (nodes_df["label"] == pm)) |
-                            ((nodes_df["level"] == "macro") & (nodes_df["label"] == pma))
-                        )
-                    else:
-                        nodes_df["highlighted"] = True
-                else:
-                    nodes_df["highlighted"] = True
-            else:
-                nodes_df["highlighted"] = True
-
+            # Constant color per node (never changes with filter)
             _dark_cache = {}
             def _darken(rgba_str):
                 if rgba_str not in _dark_cache:
@@ -632,17 +597,13 @@ def main():
                     r, g, b = [max(0, int(p.strip()) - 100) for p in parts[:3]]
                     _dark_cache[rgba_str] = f"rgb({r},{g},{b})"
                 return _dark_cache[rgba_str]
+            nodes_df["text_color"] = nodes_df["color"].map(_darken)
 
-            nodes_df["dark_color"] = nodes_df["color"].map(_darken)
-            nodes_df["text_color"] = np.where(
-                nodes_df["highlighted"], nodes_df["dark_color"], "rgb(180,180,180)"
-            )
-            nodes_df["text_size"] = np.where(nodes_df["highlighted"], 12, 10)
-
+            # Selection param — Altair handles highlighting via opacity condition
             sel = alt.selection_point(name="topic_sel", fields=["level", "label"])
 
             chart = alt.Chart(nodes_df).mark_text(
-                cursor="pointer", baseline="middle",
+                cursor="pointer", baseline="middle", fontSize=11,
                 font="-apple-system, 'Helvetica Neue', sans-serif",
             ).encode(
                 x=alt.X("col_label:N", title=None,
@@ -655,20 +616,17 @@ def main():
                          scale=alt.Scale(domain=[0, y_max], reverse=True)),
                 text="display_label:N",
                 color=alt.Color("text_color:N", scale=None, legend=None),
-                size=alt.Size("text_size:Q", scale=None, legend=None),
+                opacity=alt.condition(sel, alt.value(1.0), alt.value(0.4)),
             ).add_params(sel).properties(width=900, height=1100)
 
-            # Key changes with filter state → fresh chart on each filter change
-            # prevents stale Altair selection from re-triggering on_select
-            chart_key = f"hierarchy_{hash(str(active_filter))}"
-
+            # FIXED key — chart data never changes, so component is never recreated
             event = st.altair_chart(
                 chart, use_container_width=True,
                 on_select="rerun", selection_mode=["topic_sel"],
-                key=chart_key,
+                key="hierarchy_chart",
             )
 
-            # Process click — compare against last processed click to avoid loops
+            # Process click
             if event and event.selection and "topic_sel" in event.selection:
                 sel_data = event.selection["topic_sel"]
                 clicked = None
@@ -678,10 +636,9 @@ def main():
                 elif isinstance(sel_data, dict) and sel_data.get("level"):
                     clicked = (sel_data["level"][0], sel_data["label"][0])
 
-                last_click = st.session_state.get("_last_topic_click")
-                if clicked and clicked[0] and clicked[1] and clicked != last_click:
-                    st.session_state["_last_topic_click"] = clicked
-                    if active_filter == clicked:
+                if clicked and clicked[0] and clicked[1]:
+                    current = st.session_state.get("sankey_filter")
+                    if current == clicked:
                         st.session_state.pop("sankey_filter", None)
                     else:
                         st.session_state["sankey_filter"] = clicked
