@@ -546,16 +546,104 @@ def main():
     themes = [{"name": t} for t in topic_names]
     min_relevance = 0.2
 
-    # --- Topic Hierarchy (interactive Altair text chart) ---
+    # --- Topic Hierarchy ---
     with st.expander("Topic Hierarchy", expanded=False):
         if topics and hierarchy:
+            nodes_df, _links_df = build_hierarchy_chart_data(topics, hierarchy)
+            nodes_df = nodes_df.copy()
+
+            # Build hierarchy lookup for linked dropdowns
+            macro_topics_data = topics.get("macro", {})
+            mid_topics_data = topics.get("mid", {})
+            fine_topics_data = topics.get("fine", {})
+
+            # --- Filter dropdowns ---
+            all_macros = sorted(
+                [info["label"] for k, info in macro_topics_data.items() if k != "-1"],
+                key=lambda l: next(
+                    (info["count"] for info in macro_topics_data.values() if info.get("label") == l), 0
+                ),
+                reverse=True,
+            )
+
+            col_m, col_mid, col_f = st.columns(3)
+            with col_m:
+                sel_macro = st.selectbox(
+                    "Macro", ["All"] + all_macros,
+                    key="filter_macro", label_visibility="collapsed",
+                )
+            # Determine available mids
+            if sel_macro != "All":
+                macro_id = next(
+                    (k for k, v in macro_topics_data.items() if v.get("label") == sel_macro), None
+                )
+                avail_mid_ids = sorted(set(
+                    str(links["mid"]) for fid, links in hierarchy.items()
+                    if str(links["macro"]) == macro_id
+                )) if macro_id else []
+                avail_mids = sorted(
+                    [mid_topics_data[m]["label"] for m in avail_mid_ids if m in mid_topics_data],
+                    key=lambda l: next(
+                        (info["count"] for info in mid_topics_data.values() if info.get("label") == l), 0
+                    ), reverse=True,
+                )
+            else:
+                avail_mids = sorted(
+                    [info["label"] for info in mid_topics_data.values() if info.get("label")],
+                    key=lambda l: next(
+                        (info["count"] for info in mid_topics_data.values() if info.get("label") == l), 0
+                    ), reverse=True,
+                )
+
+            with col_mid:
+                sel_mid = st.selectbox(
+                    "Mid", ["All"] + avail_mids,
+                    key="filter_mid", label_visibility="collapsed",
+                )
+
+            # Determine available fines
+            if sel_mid != "All":
+                mid_id = next(
+                    (k for k, v in mid_topics_data.items() if v.get("label") == sel_mid), None
+                )
+                avail_fine_ids = sorted(
+                    [fid for fid, links in hierarchy.items() if str(links["mid"]) == mid_id]
+                ) if mid_id else []
+                avail_fines = sorted(
+                    [fine_topics_data[f]["label"] for f in avail_fine_ids if f in fine_topics_data],
+                    key=lambda l: next(
+                        (info["count"] for info in fine_topics_data.values() if info.get("label") == l), 0
+                    ), reverse=True,
+                )
+            else:
+                avail_fines = []
+
+            with col_f:
+                if avail_fines:
+                    sel_fine = st.selectbox(
+                        "Micro", ["All"] + avail_fines,
+                        key="filter_fine", label_visibility="collapsed",
+                    )
+                else:
+                    sel_fine = "All"
+                    st.selectbox("Micro", ["All"], key="filter_fine_disabled",
+                                 disabled=True, label_visibility="collapsed")
+
+            # Update sankey_filter based on dropdown selections (most specific wins)
+            if sel_fine != "All":
+                st.session_state["sankey_filter"] = ("fine", sel_fine)
+            elif sel_mid != "All":
+                st.session_state["sankey_filter"] = ("mid", sel_mid)
+            elif sel_macro != "All":
+                st.session_state["sankey_filter"] = ("macro", sel_macro)
+            else:
+                st.session_state.pop("sankey_filter", None)
+
             active_filter = st.session_state.get("sankey_filter")
             active_level = active_filter[0] if active_filter else None
             active_label = active_filter[1] if active_filter else None
 
-            nodes_df, _links_df = build_hierarchy_chart_data(topics, hierarchy)
-            nodes_df = nodes_df.copy()
-
+            # --- Altair text chart (static, highlights active filter) ---
             nodes_df["mid_y"] = (nodes_df["y"] + nodes_df["y2"]) / 2
             nodes_df["display_label"] = (
                 nodes_df["label"] + "  (" + nodes_df["count"].astype(str) + ")"
@@ -565,7 +653,7 @@ def main():
             )
             y_max = nodes_df["y2"].max()
 
-            # Highlighting based on active filter
+            # Highlighting
             if active_filter:
                 if active_level == "macro":
                     nodes_df["highlighted"] = nodes_df["parent_macro"] == active_label
@@ -611,10 +699,8 @@ def main():
             )
             nodes_df["text_size"] = np.where(nodes_df["highlighted"], 12, 10)
 
-            sel = alt.selection_point(name="topic_sel", fields=["level", "label"])
-
             chart = alt.Chart(nodes_df).mark_text(
-                cursor="pointer", baseline="middle",
+                baseline="middle",
                 font="-apple-system, 'Helvetica Neue', sans-serif",
             ).encode(
                 x=alt.X("col_label:N", title=None,
@@ -628,53 +714,9 @@ def main():
                 text="display_label:N",
                 color=alt.Color("text_color:N", scale=None, legend=None),
                 size=alt.Size("text_size:Q", scale=None, legend=None),
-                tooltip=[
-                    alt.Tooltip("label:N", title="Topic"),
-                    alt.Tooltip("level:N", title="Level"),
-                    alt.Tooltip("count:Q", title="Papers"),
-                    alt.Tooltip("parent_macro:N", title="Macro Theme"),
-                    alt.Tooltip("parent_mid:N", title="Mid Topic"),
-                ],
-            ).add_params(sel).properties(width=900, height=1100)
+            ).properties(width=900, height=1100)
 
-            # Use a unique key per filter state so the chart resets its selection
-            # when the filter changes (prevents stale selection → rerun loop)
-            chart_key = f"hierarchy_{hash(str(active_filter))}"
-
-            event = st.altair_chart(
-                chart, use_container_width=True,
-                on_select="rerun", key=chart_key,
-            )
-
-            # Process selection — only act if it differs from current filter
-            if event and event.selection and "topic_sel" in event.selection:
-                sel_data = event.selection["topic_sel"]
-                if isinstance(sel_data, list) and sel_data:
-                    pt = sel_data[0]
-                    clicked = (pt.get("level"), pt.get("label"))
-                elif isinstance(sel_data, dict) and sel_data.get("level"):
-                    clicked = (sel_data["level"][0], sel_data["label"][0])
-                else:
-                    clicked = None
-
-                if clicked and clicked[0] and clicked[1]:
-                    if active_filter == clicked:
-                        # Toggle off
-                        del st.session_state["sankey_filter"]
-                    else:
-                        st.session_state["sankey_filter"] = clicked
-
-            # Active filter display + clear
-            if "sankey_filter" in st.session_state:
-                s_level, s_label = st.session_state["sankey_filter"]
-                col_info, col_clear = st.columns([5, 1])
-                with col_info:
-                    st.info(f"Filtering by **{s_level}**: **{s_label}**")
-                with col_clear:
-                    if st.button("Clear", key="clear_sankey"):
-                        del st.session_state["sankey_filter"]
-
-            st.caption("Click a topic to filter the table.")
+            st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
