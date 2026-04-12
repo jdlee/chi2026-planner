@@ -685,7 +685,6 @@ def main():
                         st.session_state.pop("sankey_filter", None)
                     else:
                         st.session_state["sankey_filter"] = clicked
-                    st.rerun()
 
             st.caption("Click a topic to filter the table.")
         else:
