@@ -582,45 +582,123 @@ def main():
             mid_topics_data = topics.get("mid", {})
             fine_topics_data = topics.get("fine", {})
 
-            # Build Sankey nodes and links
-            sankey_nodes = []
-            sankey_links = []
+            active_filter = st.session_state.get("sankey_filter")
 
-            # Macro nodes
-            for k, v in macro_topics_data.items():
-                if k == "-1":
-                    continue
-                color = MACRO_COLORS[int(k) % len(MACRO_COLORS)]
+            # Build parent maps
+            mid_to_macro_id = {}
+            fine_to_mid_id = {}
+            for fid, h in hierarchy.items():
+                mid_to_macro_id[str(h["mid"])] = str(h["macro"])
+                fine_to_mid_id[fid] = str(h["mid"])
+
+            # Compute which labels are highlighted
+            highlighted_labels = set()
+            if active_filter:
+                al, ab = active_filter
+                if al == "macro":
+                    highlighted_labels.add(ab)
+                    for mid_id, macro_id in mid_to_macro_id.items():
+                        if macro_topics_data.get(macro_id, {}).get("label") == ab:
+                            highlighted_labels.add(mid_topics_data.get(mid_id, {}).get("label", ""))
+                            for fid, h in hierarchy.items():
+                                if str(h["mid"]) == mid_id:
+                                    highlighted_labels.add(fine_topics_data.get(fid, {}).get("label", ""))
+                elif al == "mid":
+                    highlighted_labels.add(ab)
+                    # Parent macro
+                    for mid_id, macro_id in mid_to_macro_id.items():
+                        if mid_topics_data.get(mid_id, {}).get("label") == ab:
+                            highlighted_labels.add(macro_topics_data.get(macro_id, {}).get("label", ""))
+                            # Child fines
+                            for fid, h in hierarchy.items():
+                                if str(h["mid"]) == mid_id:
+                                    highlighted_labels.add(fine_topics_data.get(fid, {}).get("label", ""))
+                            break
+                elif al == "fine":
+                    highlighted_labels.add(ab)
+                    for fid, h in hierarchy.items():
+                        if fine_topics_data.get(fid, {}).get("label") == ab:
+                            mid_id = str(h["mid"])
+                            macro_id = str(h["macro"])
+                            highlighted_labels.add(mid_topics_data.get(mid_id, {}).get("label", ""))
+                            highlighted_labels.add(macro_topics_data.get(macro_id, {}).get("label", ""))
+                            break
+
+            # Sorted macro order (descending count)
+            macro_order = sorted(
+                [k for k in macro_topics_data if k != "-1"],
+                key=lambda k: macro_topics_data[k]["count"], reverse=True,
+            )
+
+            # Build ordered mid/fine lists grouped by macro
+            mid_order = []
+            for macro_id in macro_order:
+                mid_order.extend(sorted(
+                    [m for m, p in mid_to_macro_id.items() if p == macro_id],
+                    key=lambda m: mid_topics_data.get(m, {}).get("count", 0), reverse=True,
+                ))
+            fine_order = []
+            for mid_id in mid_order:
+                fine_order.extend(sorted(
+                    [f for f, h in hierarchy.items() if str(h["mid"]) == mid_id],
+                    key=lambda f: fine_topics_data.get(f, {}).get("count", 0), reverse=True,
+                ))
+
+            DIM = "#e0e0e0"
+
+            # Build Sankey nodes in sorted order
+            sankey_nodes = []
+            for macro_id in macro_order:
+                v = macro_topics_data[macro_id]
+                color = MACRO_COLORS[int(macro_id) % len(MACRO_COLORS)]
+                hl = not active_filter or v["label"] in highlighted_labels
                 sankey_nodes.append({
                     "name": v["label"],
-                    "itemStyle": {"color": color, "borderColor": color},
+                    "itemStyle": {
+                        "color": color if hl else DIM,
+                        "borderColor": color if hl else DIM,
+                        "opacity": 1.0 if hl else 0.3,
+                    },
+                    "label": {"color": "#1d1d1f" if hl else "#ccc"},
                     "depth": 0,
                 })
 
-            # Mid nodes
-            mid_to_macro_id = {}
-            for fid, h in hierarchy.items():
-                mid_to_macro_id[str(h["mid"])] = str(h["macro"])
-            for k, v in mid_topics_data.items():
-                macro_id = mid_to_macro_id.get(k, "0")
+            for mid_id in mid_order:
+                v = mid_topics_data.get(mid_id, {})
+                macro_id = mid_to_macro_id.get(mid_id, "0")
                 color = MACRO_COLORS[int(macro_id) % len(MACRO_COLORS)]
+                label = v.get("label", "")
+                hl = not active_filter or label in highlighted_labels
                 sankey_nodes.append({
-                    "name": v.get("label", ""),
-                    "itemStyle": {"color": color, "borderColor": color},
+                    "name": label,
+                    "itemStyle": {
+                        "color": color if hl else DIM,
+                        "borderColor": color if hl else DIM,
+                        "opacity": 1.0 if hl else 0.3,
+                    },
+                    "label": {"color": "#1d1d1f" if hl else "#ccc"},
                     "depth": 1,
                 })
 
-            # Fine nodes
-            for k, v in fine_topics_data.items():
-                macro_id = str(hierarchy.get(k, {}).get("macro", 0))
+            for fine_id in fine_order:
+                v = fine_topics_data.get(fine_id, {})
+                macro_id = str(hierarchy.get(fine_id, {}).get("macro", 0))
                 color = MACRO_COLORS[int(macro_id) % len(MACRO_COLORS)]
+                label = v.get("label", "")
+                hl = not active_filter or label in highlighted_labels
                 sankey_nodes.append({
-                    "name": v.get("label", ""),
-                    "itemStyle": {"color": color, "borderColor": color},
+                    "name": label,
+                    "itemStyle": {
+                        "color": color if hl else DIM,
+                        "borderColor": color if hl else DIM,
+                        "opacity": 1.0 if hl else 0.3,
+                    },
+                    "label": {"color": "#1d1d1f" if hl else "#ccc"},
                     "depth": 2,
                 })
 
             # Links: macro → mid (aggregate fine counts)
+            sankey_links = []
             mid_agg = {}
             for fid, h in hierarchy.items():
                 macro_id = str(h["macro"])
@@ -633,48 +711,55 @@ def main():
                 src = macro_topics_data.get(macro_id, {}).get("label", "")
                 tgt = mid_topics_data.get(mid_id, {}).get("label", "")
                 if src and tgt and cnt > 0:
-                    sankey_links.append({"source": src, "target": tgt, "value": cnt})
+                    hl = not active_filter or (src in highlighted_labels and tgt in highlighted_labels)
+                    sankey_links.append({
+                        "source": src, "target": tgt, "value": cnt,
+                        "lineStyle": {"opacity": 0.35 if hl else 0.05},
+                    })
 
             # Links: mid → fine
-            for fid, h in hierarchy.items():
+            for fid in fine_order:
+                h = hierarchy[fid]
                 mid_id = str(h["mid"])
                 cnt = fine_topics_data.get(fid, {}).get("count", 0)
                 src = mid_topics_data.get(mid_id, {}).get("label", "")
                 tgt = fine_topics_data.get(fid, {}).get("label", "")
                 if src and tgt and cnt > 0:
-                    sankey_links.append({"source": src, "target": tgt, "value": cnt})
+                    hl = not active_filter or (src in highlighted_labels and tgt in highlighted_labels)
+                    sankey_links.append({
+                        "source": src, "target": tgt, "value": cnt,
+                        "lineStyle": {"opacity": 0.35 if hl else 0.05},
+                    })
 
             option = {
                 "tooltip": {"trigger": "item", "triggerOn": "mousemove"},
                 "series": [{
                     "type": "sankey",
-                    "layout": "none",
                     "emphasis": {"focus": "adjacency"},
                     "nodeAlign": "justify",
                     "orient": "horizontal",
                     "nodeGap": 4,
-                    "nodeWidth": 12,
-                    "layoutIterations": 0,
+                    "nodeWidth": 14,
+                    "layoutIterations": 32,
                     "label": {
                         "show": True,
                         "fontSize": 10,
                         "fontFamily": "-apple-system, 'Helvetica Neue', sans-serif",
                     },
-                    "lineStyle": {"color": "source", "opacity": 0.3},
+                    "lineStyle": {"color": "source"},
                     "data": sankey_nodes,
                     "links": sankey_links,
                 }],
             }
 
             clicked = st_echarts(
-                option, height="700px",
+                option, height="800px",
                 events={"click": "function(params) { return params.name; }"},
                 key="sankey_chart",
             )
 
-            # Process click event from ECharts
+            # Process click event
             if clicked and isinstance(clicked, str):
-                # Determine which level this label belongs to
                 macro_labels = {v["label"] for k, v in macro_topics_data.items() if k != "-1"}
                 mid_labels = {v.get("label", "") for v in mid_topics_data.values()}
                 fine_labels = {v.get("label", "") for v in fine_topics_data.values()}
@@ -694,6 +779,8 @@ def main():
                         st.session_state.pop("sankey_filter", None)
                     else:
                         st.session_state["sankey_filter"] = (level, clicked)
+
+            st.caption("Click a node to filter the table. Hover to highlight connections.")
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
