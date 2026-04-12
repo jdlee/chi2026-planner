@@ -708,14 +708,13 @@ def main():
             clicked_level = params.get("topic_level")
             clicked_label = params.get("topic_label")
             if clicked_level and clicked_label:
-                # Clear query params
-                st.query_params.clear()
                 clicked = (clicked_level, clicked_label)
                 if active_filter == clicked:
                     st.session_state.pop("sankey_filter", None)
                 else:
                     st.session_state["sankey_filter"] = clicked
-                st.rerun()
+                # clear() triggers its own rerun — no st.rerun() needed
+                st.query_params.clear()
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
