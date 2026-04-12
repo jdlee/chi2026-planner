@@ -627,94 +627,106 @@ def main():
             col_x = {"macro": 0, "mid": 1, "fine": 2}
             col_headers = {"macro": "Macro", "mid": "Mid", "fine": "Micro"}
 
-            items_js = []
+            # Static HTML chart (no click handlers, no JS)
+            items_html = []
             for _, r in nodes_df.iterrows():
                 color = r["dark"] if r["hl"] else "rgb(190,190,190)"
                 weight = "600" if r["hl"] else "400"
                 size = "12px" if r["hl"] else "10px"
                 y_pct = (r["mid_y"] / y_max) * 100 if y_max > 0 else 0
                 col = col_x[r["level"]]
-                level = r["level"]
-                label = r["label"].replace("'", "\\'")
-                display = r["display_label"].replace("'", "\\'")
-                items_js.append(
-                    f"{{col:{col},y:{y_pct:.2f},color:'{color}',weight:'{weight}',"
-                    f"size:'{size}',level:'{level}',label:'{label}',display:'{display}'}}"
+                align = "right" if col == 0 else ("left" if col == 2 else "center")
+                transform = "-100%" if col == 0 else ("0%" if col == 2 else "-50%")
+                pad_r = "8px" if col == 0 else "0"
+                pad_l = "8px" if col == 2 else "0"
+                col_pct = [16.67, 50, 83.33][col]
+                display = r["display_label"].replace("&", "&amp;").replace("<", "&lt;")
+                items_html.append(
+                    f'<div style="position:absolute;top:{y_pct:.2f}%;left:{col_pct}%;'
+                    f'color:{color};font-weight:{weight};font-size:{size};'
+                    f'transform:translate({transform},-50%);white-space:nowrap;'
+                    f'padding-right:{pad_r};padding-left:{pad_l}">{display}</div>'
                 )
 
             html = f"""
-            <style>
-              .th-wrap {{
-                position: relative; width: 100%; height: 1100px;
-                font-family: -apple-system, 'Helvetica Neue', sans-serif;
-              }}
-              .th-header {{
-                display: flex; font-size: 13px; font-weight: 600;
-                color: #86868b; padding-bottom: 8px;
-              }}
-              .th-header span {{ flex: 1; text-align: center; }}
-              .th-body {{ position: relative; width: 100%; height: 1060px; }}
-              .th-item {{
-                position: absolute; cursor: pointer; white-space: nowrap;
-                transition: opacity 0.15s;
-              }}
-              .th-item:hover {{ opacity: 1 !important; text-decoration: underline; }}
-            </style>
-            <div class="th-wrap">
-              <div class="th-header">
-                <span>Macro</span><span>Mid</span><span>Micro</span>
+            <div style="position:relative;width:100%;height:1100px;
+                        font-family:-apple-system,'Helvetica Neue',sans-serif">
+              <div style="display:flex;font-size:13px;font-weight:600;
+                          color:#86868b;padding-bottom:8px">
+                <span style="flex:1;text-align:center">Macro</span>
+                <span style="flex:1;text-align:center">Mid</span>
+                <span style="flex:1;text-align:center">Micro</span>
               </div>
-              <div class="th-body" id="th-body"></div>
+              <div style="position:relative;width:100%;height:1060px">
+                {''.join(items_html)}
+              </div>
             </div>
-            <script>
-              const items = [{','.join(items_js)}];
-              const body = document.getElementById('th-body');
-              const colPcts = [16.67, 50, 83.33]; // center of each third
-              const aligns = ['right', 'center', 'left'];
-              const offsets = ['-4px', '0', '4px'];
-
-              items.forEach(it => {{
-                const el = document.createElement('div');
-                el.className = 'th-item';
-                el.style.top = it.y + '%';
-                el.style.left = colPcts[it.col] + '%';
-                el.style.color = it.color;
-                el.style.fontWeight = it.weight;
-                el.style.fontSize = it.size;
-                el.style.transform = 'translate(' +
-                  (it.col === 0 ? '-100%' : it.col === 2 ? '0%' : '-50%') +
-                  ', -50%)';
-                el.style.paddingRight = it.col === 0 ? '8px' : '0';
-                el.style.paddingLeft = it.col === 2 ? '8px' : '0';
-                el.textContent = it.display;
-                el.onclick = () => {{
-                  // Post message to Streamlit via query params
-                  const url = new URL(window.parent.location);
-                  url.searchParams.set('topic_level', it.level);
-                  url.searchParams.set('topic_label', it.label);
-                  window.parent.history.replaceState(null, '', url);
-                  // Trigger Streamlit rerun
-                  window.parent.postMessage({{type: 'streamlit:rerun'}}, '*');
-                }};
-                body.appendChild(el);
-              }});
-            </script>
             """
 
+            import streamlit.components.v1 as components
             components.html(html, height=1120, scrolling=False)
 
-            # Read click from query params
-            params = st.query_params
-            clicked_level = params.get("topic_level")
-            clicked_label = params.get("topic_label")
-            if clicked_level and clicked_label:
-                clicked = (clicked_level, clicked_label)
-                if active_filter == clicked:
-                    st.session_state.pop("sankey_filter", None)
-                else:
-                    st.session_state["sankey_filter"] = clicked
-                # clear() triggers its own rerun — no st.rerun() needed
-                st.query_params.clear()
+            # --- Topic filter via pills (native widget, no rerun loops) ---
+            macro_topics_data = topics.get("macro", {})
+            mid_topics_data = topics.get("mid", {})
+            fine_topics_data = topics.get("fine", {})
+
+            macro_labels = sorted(
+                [info["label"] for k, info in macro_topics_data.items() if k != "-1"],
+                key=lambda l: next(
+                    (v["count"] for v in macro_topics_data.values() if v.get("label") == l), 0
+                ), reverse=True,
+            )
+
+            sel_macro = st.pills(
+                "Macro", macro_labels, key="pills_macro",
+                default=active_label if active_level == "macro" else None,
+            )
+
+            if sel_macro:
+                st.session_state["sankey_filter"] = ("macro", sel_macro)
+
+                # Show mid pills for selected macro
+                macro_id = next(
+                    (k for k, v in macro_topics_data.items() if v.get("label") == sel_macro), None
+                )
+                if macro_id:
+                    mid_ids = sorted(set(
+                        str(links["mid"]) for fid, links in hierarchy.items()
+                        if str(links["macro"]) == macro_id
+                    ))
+                    mid_labels = sorted(
+                        [mid_topics_data[m]["label"] for m in mid_ids if m in mid_topics_data],
+                        key=lambda l: next(
+                            (v["count"] for v in mid_topics_data.values() if v.get("label") == l), 0
+                        ), reverse=True,
+                    )
+                    sel_mid = st.pills(
+                        "Mid", mid_labels, key="pills_mid",
+                        default=active_label if active_level in ("mid", "fine") else None,
+                    )
+                    if sel_mid:
+                        st.session_state["sankey_filter"] = ("mid", sel_mid)
+
+                        # Show fine pills for selected mid
+                        mid_id = next(
+                            (k for k, v in mid_topics_data.items() if v.get("label") == sel_mid), None
+                        )
+                        if mid_id:
+                            fine_ids = sorted(
+                                [fid for fid, links in hierarchy.items() if str(links["mid"]) == mid_id],
+                                key=lambda f: fine_topics_data.get(f, {}).get("count", 0),
+                                reverse=True,
+                            )
+                            fine_labels = [fine_topics_data[f]["label"] for f in fine_ids if f in fine_topics_data]
+                            sel_fine = st.pills(
+                                "Micro", fine_labels, key="pills_fine",
+                                default=active_label if active_level == "fine" else None,
+                            )
+                            if sel_fine:
+                                st.session_state["sankey_filter"] = ("fine", sel_fine)
+            else:
+                st.session_state.pop("sankey_filter", None)
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
