@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 
-import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -534,161 +533,199 @@ def main():
     themes = [{"name": t} for t in topic_names]
     min_relevance = 0.2
 
-    # --- Topic Hierarchy (Altair strip chart) ---
-    def topic_hierarchy_section():
-        nodes_df, _links_df = build_hierarchy_chart_data(topics, hierarchy)
-        nodes_df = nodes_df.copy()  # don't mutate cached df
-
-        nodes_df["mid_y"] = (nodes_df["y"] + nodes_df["y2"]) / 2
-        nodes_df["display_label"] = (
-            nodes_df["label"] + "  (" + nodes_df["count"].astype(str) + ")"
-        )
-        nodes_df["col_label"] = nodes_df["level"].map(
-            {"macro": "Macro", "mid": "Mid", "fine": "Micro"}
-        )
-        y_max = nodes_df["y2"].max()
-
-        # Compute hierarchical highlighting based on active filter
-        active_filter = st.session_state.get("sankey_filter")
-        if active_filter:
-            f_level, f_label = active_filter
-            if f_level == "macro":
-                nodes_df["highlighted"] = nodes_df["parent_macro"] == f_label
-            elif f_level == "mid":
-                mid_rows = nodes_df.loc[
-                    (nodes_df["level"] == "mid") & (nodes_df["label"] == f_label)
-                ]
-                parent_macro = mid_rows.iloc[0]["parent_macro"] if len(mid_rows) else ""
-                nodes_df["highlighted"] = (
-                    (nodes_df["parent_mid"] == f_label) |
-                    ((nodes_df["level"] == "macro") & (nodes_df["label"] == parent_macro))
-                )
-            elif f_level == "fine":
-                fine_rows = nodes_df.loc[
-                    (nodes_df["level"] == "fine") & (nodes_df["label"] == f_label)
-                ]
-                if len(fine_rows):
-                    parent_mid = fine_rows.iloc[0]["parent_mid"]
-                    parent_macro = fine_rows.iloc[0]["parent_macro"]
-                    nodes_df["highlighted"] = (
-                        ((nodes_df["level"] == "fine") & (nodes_df["label"] == f_label)) |
-                        ((nodes_df["level"] == "mid") & (nodes_df["label"] == parent_mid)) |
-                        ((nodes_df["level"] == "macro") & (nodes_df["label"] == parent_macro))
-                    )
-                else:
-                    nodes_df["highlighted"] = True
-            else:
-                nodes_df["highlighted"] = True
-        else:
-            nodes_df["highlighted"] = True
-
-        # Color & size: highlighted = dark macro color + larger; others = gray + smaller
-        # Pre-compute dark color for each macro color (vectorized via lookup)
-        _dark_cache = {}
-        def _darken(rgba_str):
-            if rgba_str not in _dark_cache:
-                parts = rgba_str.replace("rgba(", "").replace(")", "").split(",")
-                r, g, b = [max(0, int(p.strip()) - 100) for p in parts[:3]]
-                _dark_cache[rgba_str] = f"rgb({r},{g},{b})"
-            return _dark_cache[rgba_str]
-
-        nodes_df["dark_color"] = nodes_df["color"].map(_darken)
-        nodes_df["text_color"] = np.where(
-            nodes_df["highlighted"], nodes_df["dark_color"], "rgb(180,180,180)"
-        )
-        nodes_df["text_size"] = np.where(nodes_df["highlighted"], 12, 10)
-
-        node_selection = alt.selection_point(
-            name="node_sel", fields=["level", "label"], on="click",
-        )
-
-        nodes_chart = alt.Chart(nodes_df).mark_text(
-            cursor="pointer", baseline="middle",
-            font="-apple-system, 'Helvetica Neue', sans-serif",
-        ).encode(
-            x=alt.X("col_label:N", title=None,
-                     sort=["Macro", "Mid", "Micro"],
-                     axis=alt.Axis(orient="top", labelFontSize=13,
-                                   labelFontWeight=600, labelPadding=12,
-                                   labelAngle=0, labelColor="#86868b",
-                                   domain=False, ticks=False)),
-            y=alt.Y("mid_y:Q", axis=None,
-                     scale=alt.Scale(domain=[0, y_max], reverse=True)),
-            text="display_label:N",
-            color=alt.Color("text_color:N", scale=None, legend=None),
-            size=alt.Size("text_size:Q", scale=None, legend=None),
-            opacity=alt.condition(
-                node_selection,
-                alt.value(1.0),
-                alt.value(0.9),
-            ),
-            tooltip=[
-                alt.Tooltip("label:N", title="Topic"),
-                alt.Tooltip("level:N", title="Level"),
-                alt.Tooltip("count:Q", title="Papers"),
-                alt.Tooltip("parent_macro:N", title="Macro Theme"),
-                alt.Tooltip("parent_mid:N", title="Mid Topic"),
-            ],
-        ).add_params(
-            node_selection,
-        ).properties(width=900, height=1100)
-
-        st.caption(
-            "Click a topic to filter the table. "
-            "Related parent and child topics are highlighted."
-        )
-
-        event = st.altair_chart(
-            nodes_chart,
-            use_container_width=True,
-            on_select="rerun",
-            key="hierarchy_chart",
-        )
-
-        # Process click events — only act if selection changed since last processed
-        if event and event.selection and "node_sel" in event.selection:
-            sel = event.selection["node_sel"]
-            if isinstance(sel, list) and sel:
-                pt = sel[0]
-                level = pt.get("level")
-                label = pt.get("label")
-            elif isinstance(sel, dict):
-                level = (sel.get("level", [None]) or [None])[0]
-                label = (sel.get("label", [None]) or [None])[0]
-            else:
-                level = label = None
-            if level and label:
-                clicked = (level, label)
-                last_click = st.session_state.get("_last_hierarchy_click")
-                if clicked != last_click:
-                    st.session_state["_last_hierarchy_click"] = clicked
-                    if st.session_state.get("sankey_filter") == clicked:
-                        del st.session_state["sankey_filter"]
-                    else:
-                        st.session_state["sankey_filter"] = clicked
-                    st.rerun()
-
-        # Show active filter with clear button
-        if "sankey_filter" in st.session_state:
-            s_level, s_label = st.session_state["sankey_filter"]
-            col_info, col_clear = st.columns([5, 1])
-            with col_info:
-                st.info(f"Filtering by **{s_level}** topic: **{s_label}**")
-            with col_clear:
-                if st.button("Clear filter", key="clear_sankey"):
-                    del st.session_state["sankey_filter"]
-                    st.session_state.pop("_last_hierarchy_click", None)
-                    st.rerun()
-
-        st.caption(
-            f"{len(topics.get('macro', {})) - 1} macro themes  /  "
-            f"{len(topics.get('mid', {})) - 1} mid-level topics  /  "
-            f"{len(topics.get('fine', {})) - 1} fine clusters"
-        )
-
+    # --- Topic Hierarchy (button-based) ---
     with st.expander("Topic Hierarchy", expanded=False):
         if topics and hierarchy:
-            topic_hierarchy_section()
+            macro_topics_data = topics.get("macro", {})
+            mid_topics_data = topics.get("mid", {})
+            fine_topics_data = topics.get("fine", {})
+
+            active_filter = st.session_state.get("sankey_filter")
+            active_level = active_filter[0] if active_filter else None
+            active_label = active_filter[1] if active_filter else None
+
+            # Show active filter with clear button
+            if active_filter:
+                col_info, col_clear = st.columns([5, 1])
+                with col_info:
+                    st.info(f"Filtering by **{active_level}** topic: **{active_label}**")
+                with col_clear:
+                    if st.button("Clear", key="clear_sankey"):
+                        del st.session_state["sankey_filter"]
+                        st.rerun()
+
+            st.caption("Click a topic to filter the table.")
+
+            # --- Macro themes ---
+            st.markdown(
+                '<p class="sidebar-label">Macro Themes</p>',
+                unsafe_allow_html=True,
+            )
+            macro_ids = sorted(
+                [k for k in macro_topics_data if k != "-1"],
+                key=lambda k: macro_topics_data[k].get("count", 0),
+                reverse=True,
+            )
+            n_cols = min(4, len(macro_ids))
+            for row_start in range(0, len(macro_ids), n_cols):
+                row_ids = macro_ids[row_start:row_start + n_cols]
+                cols = st.columns(n_cols)
+                for i, macro_id in enumerate(row_ids):
+                    info = macro_topics_data[macro_id]
+                    label = info.get("label", macro_id)
+                    count = info.get("count", 0)
+                    is_active = active_filter == ("macro", label)
+                    btn_type = "primary" if is_active else "secondary"
+                    with cols[i]:
+                        if st.button(
+                            f"{label} ({count})",
+                            key=f"macro_{macro_id}",
+                            use_container_width=True,
+                            type=btn_type,
+                        ):
+                            if is_active:
+                                del st.session_state["sankey_filter"]
+                            else:
+                                st.session_state["sankey_filter"] = ("macro", label)
+                            st.rerun()
+
+            # --- Mid topics (show children of active macro, or all) ---
+            st.markdown(
+                '<p class="sidebar-label">Mid Topics</p>',
+                unsafe_allow_html=True,
+            )
+
+            # Determine which mid topics to show
+            if active_level == "macro":
+                # Find macro_id for active label
+                active_macro_id = None
+                for mid, info in macro_topics_data.items():
+                    if info.get("label") == active_label:
+                        active_macro_id = mid
+                        break
+                if active_macro_id:
+                    child_mids = sorted(set(
+                        str(links["mid"]) for fid, links in hierarchy.items()
+                        if str(links["macro"]) == active_macro_id
+                    ))
+                else:
+                    child_mids = sorted(mid_topics_data.keys())
+            elif active_level == "mid":
+                # Show the active mid's parent macro's children
+                active_mid_id = None
+                for mid, info in mid_topics_data.items():
+                    if info.get("label") == active_label:
+                        active_mid_id = mid
+                        break
+                if active_mid_id:
+                    parent_macro_id = None
+                    for fid, links in hierarchy.items():
+                        if str(links["mid"]) == active_mid_id:
+                            parent_macro_id = str(links["macro"])
+                            break
+                    if parent_macro_id:
+                        child_mids = sorted(set(
+                            str(links["mid"]) for fid, links in hierarchy.items()
+                            if str(links["macro"]) == parent_macro_id
+                        ))
+                    else:
+                        child_mids = sorted(mid_topics_data.keys())
+                else:
+                    child_mids = sorted(mid_topics_data.keys())
+            else:
+                child_mids = sorted(
+                    mid_topics_data.keys(),
+                    key=lambda k: mid_topics_data[k].get("count", 0),
+                    reverse=True,
+                )
+
+            # Sort by count descending
+            child_mids = sorted(
+                child_mids,
+                key=lambda k: mid_topics_data.get(k, {}).get("count", 0),
+                reverse=True,
+            )
+
+            n_mid_cols = min(5, len(child_mids))
+            if n_mid_cols > 0:
+                for row_start in range(0, len(child_mids), n_mid_cols):
+                    row_ids = child_mids[row_start:row_start + n_mid_cols]
+                    cols = st.columns(n_mid_cols)
+                    for i, mid_id in enumerate(row_ids):
+                        mid_info = mid_topics_data.get(mid_id, {})
+                        mid_label = mid_info.get("label", mid_id)
+                        mid_count = mid_info.get("count", 0)
+                        is_active = active_filter == ("mid", mid_label)
+                        btn_type = "primary" if is_active else "secondary"
+                        with cols[i]:
+                            if st.button(
+                                f"{mid_label} ({mid_count})",
+                                key=f"mid_{mid_id}",
+                                use_container_width=True,
+                                type=btn_type,
+                            ):
+                                if is_active:
+                                    del st.session_state["sankey_filter"]
+                                else:
+                                    st.session_state["sankey_filter"] = ("mid", mid_label)
+                                st.rerun()
+
+            # --- Micro topics (show if mid is selected) ---
+            if active_level in ("mid", "fine"):
+                st.markdown(
+                    '<p class="sidebar-label">Micro Topics</p>',
+                    unsafe_allow_html=True,
+                )
+                active_mid_id = None
+                if active_level == "mid":
+                    for mid, info in mid_topics_data.items():
+                        if info.get("label") == active_label:
+                            active_mid_id = mid
+                            break
+                elif active_level == "fine":
+                    # Find parent mid of the active fine topic
+                    for fid, links in hierarchy.items():
+                        fine_info = fine_topics_data.get(fid, {})
+                        if fine_info.get("label") == active_label:
+                            active_mid_id = str(links["mid"])
+                            break
+
+                if active_mid_id:
+                    child_fines = sorted(
+                        [fid for fid, links in hierarchy.items()
+                         if str(links["mid"]) == active_mid_id],
+                        key=lambda f: fine_topics_data.get(f, {}).get("count", 0),
+                        reverse=True,
+                    )
+                    n_fine_cols = min(5, len(child_fines))
+                    if n_fine_cols > 0:
+                        for row_start in range(0, len(child_fines), n_fine_cols):
+                            row_ids = child_fines[row_start:row_start + n_fine_cols]
+                            cols = st.columns(n_fine_cols)
+                            for i, fine_id in enumerate(row_ids):
+                                fine_info = fine_topics_data.get(fine_id, {})
+                                fine_label = fine_info.get("label", fine_id)
+                                fine_count = fine_info.get("count", 0)
+                                is_active = active_filter == ("fine", fine_label)
+                                btn_type = "primary" if is_active else "secondary"
+                                with cols[i]:
+                                    if st.button(
+                                        f"{fine_label} ({fine_count})",
+                                        key=f"fine_{fine_id}",
+                                        use_container_width=True,
+                                        type=btn_type,
+                                    ):
+                                        if is_active:
+                                            del st.session_state["sankey_filter"]
+                                        else:
+                                            st.session_state["sankey_filter"] = ("fine", fine_label)
+                                        st.rerun()
+
+            st.caption(
+                f"{len(macro_topics_data) - 1} macro  /  "
+                f"{len(mid_topics_data)} mid  /  "
+                f"{len(fine_topics_data)} micro"
+            )
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
