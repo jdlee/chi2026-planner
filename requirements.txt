@@ -2,11 +2,10 @@ streamlit>=1.45.0
 pandas>=2.2.0
 numpy>=1.26.0
 icalendar>=6.1.0
-sentence-transformers>=3.0.0
-scikit-learn>=1.6.0
-nltk>=3.9.0
-
 # Pipeline-only (not needed for deployed app)
+# sentence-transformers>=3.0.0  # optional: enables semantic search
+# scikit-learn>=1.6.0
+# nltk>=3.9.0
 # playwright==1.52.0
 # anthropic>=0.49.0
 # python-dotenv>=1.0

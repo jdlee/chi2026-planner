@@ -78,6 +78,15 @@ def build_dataframe(papers, topic_names):
     return df
 
 
+def _has_sentence_transformers():
+    """Check if sentence-transformers is available."""
+    try:
+        import sentence_transformers  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 @st.cache_resource
 def _load_embedding_model():
     """Load sentence-transformers model (cached across reruns)."""
@@ -94,6 +103,9 @@ def compute_paper_embeddings(papers) -> np.ndarray:
         emb = np.load(str(embeddings_path))
         if emb.shape[0] == len(papers):
             return emb
+
+    if not _has_sentence_transformers():
+        return None
 
     model = _load_embedding_model()
     texts = [
@@ -922,14 +934,20 @@ def main():
             df = df[df["cluster_label"] == s_label]
 
     # --- Semantic Search ---
-    search_query = st.text_input(
-        "Search papers",
-        placeholder="e.g. accessibility assistive technology blind",
-        key="semantic_search",
-        label_visibility="collapsed",
-    )
+    # Check if embeddings are available (pre-computed .npy or sentence-transformers installed)
+    embeddings_path = DATA_DIR / "paper_embeddings.npy"
+    search_available = embeddings_path.exists() or _has_sentence_transformers()
 
-    # --- Papers Table (AgGrid) ---
+    search_query = ""
+    if search_available:
+        search_query = st.text_input(
+            "Search papers",
+            placeholder="e.g. accessibility assistive technology blind",
+            key="semantic_search",
+            label_visibility="collapsed",
+        )
+
+    # --- Papers Table ---
     paper_count_placeholder = st.empty()
 
     if has_hierarchy:
@@ -941,20 +959,22 @@ def main():
     # Apply semantic search if query is provided
     if search_query and len(search_query.strip()) >= 2:
         paper_embeddings = compute_paper_embeddings(papers)
-        search_results = semantic_search(search_query.strip(), paper_embeddings, papers)
-        display_df = display_df.merge(
-            search_results[["_index", "search_score", "search_keywords"]],
-            on="_index", how="left",
-        )
-        # Format display column: "keywords (0.72)" or ""
-        display_df["search_match"] = display_df.apply(
-            lambda r: f"{r['search_keywords']} ({r['search_score']:.2f})"
-            if pd.notna(r["search_score"]) and r["search_keywords"]
-            else ("" if pd.isna(r["search_score"]) else f"({r['search_score']:.2f})"),
-            axis=1,
-        )
-        # Sort by score descending (NaN at bottom)
-        display_df = display_df.sort_values("search_score", ascending=False, na_position="last")
+        if paper_embeddings is None:
+            st.warning("Semantic search unavailable — install sentence-transformers for this feature.")
+            search_query = ""
+        else:
+            search_results = semantic_search(search_query.strip(), paper_embeddings, papers)
+            display_df = display_df.merge(
+                search_results[["_index", "search_score", "search_keywords"]],
+                on="_index", how="left",
+            )
+            display_df["search_match"] = display_df.apply(
+                lambda r: f"{r['search_keywords']} ({r['search_score']:.2f})"
+                if pd.notna(r["search_score"]) and r["search_keywords"]
+                else ("" if pd.isna(r["search_score"]) else f"({r['search_score']:.2f})"),
+                axis=1,
+            )
+            display_df = display_df.sort_values("search_score", ascending=False, na_position="last")
     else:
         display_df["search_match"] = ""
         display_df["search_score"] = np.nan
