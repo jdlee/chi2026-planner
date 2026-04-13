@@ -572,11 +572,11 @@ def main():
 
     # --- Topic Hierarchy (clickable text chart) ---
     # Keep expander open if user has interacted with topic selection
-    # --- Topic Hierarchy (ECharts Sankey) ---
+    # --- Topic Hierarchy (ECharts Sankey via raw HTML) ---
     _hierarchy_open = "sankey_filter" in st.session_state
     with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
         if topics and hierarchy:
-            from streamlit_echarts import st_echarts
+            import streamlit.components.v1 as components
 
             macro_topics_data = topics.get("macro", {})
             mid_topics_data = topics.get("mid", {})
@@ -731,6 +731,7 @@ def main():
                         "lineStyle": {"opacity": 0.35 if hl else 0.05},
                     })
 
+            import json as _json
             option = {
                 "tooltip": {"trigger": "item", "triggerOn": "mousemove"},
                 "series": [{
@@ -752,35 +753,57 @@ def main():
                 }],
             }
 
-            clicked = st_echarts(
-                option, height="800px",
-                events={"click": "function(params) { return params.name; }"},
-                key="sankey_chart",
+            # Render ECharts Sankey via CDN (no streamlit-echarts dependency)
+            option_json = _json.dumps(option)
+            html = f"""
+            <div id="sankey" style="width:100%;height:780px"></div>
+            <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+            <script>
+                var chart = echarts.init(document.getElementById('sankey'));
+                chart.setOption({option_json});
+                window.addEventListener('resize', function() {{ chart.resize(); }});
+            </script>
+            """
+            components.html(html, height=800, scrolling=False)
+
+            # Filter selection via selectbox (reliable, no rerun loops)
+            all_topics = []
+            for k in macro_order:
+                v = macro_topics_data[k]
+                all_topics.append(("macro", v["label"], v["count"]))
+            for mid_id in mid_order:
+                v = mid_topics_data.get(mid_id, {})
+                all_topics.append(("mid", v.get("label", ""), v.get("count", 0)))
+            for fine_id in fine_order:
+                v = fine_topics_data.get(fine_id, {})
+                all_topics.append(("fine", v.get("label", ""), v.get("count", 0)))
+
+            options = ["All topics"] + [
+                f"{lvl}: {lbl} ({cnt})" for lvl, lbl, cnt in all_topics
+            ]
+            current = st.session_state.get("sankey_filter")
+            current_idx = 0
+            if current:
+                target = f"{current[0]}: {current[1]}"
+                for i, opt in enumerate(options):
+                    if opt.startswith(target):
+                        current_idx = i
+                        break
+
+            selected = st.selectbox(
+                "Filter by topic", options, index=current_idx,
+                key="topic_filter_select", label_visibility="collapsed",
             )
 
-            # Process click event
-            if clicked and isinstance(clicked, str):
-                macro_labels = {v["label"] for k, v in macro_topics_data.items() if k != "-1"}
-                mid_labels = {v.get("label", "") for v in mid_topics_data.values()}
-                fine_labels = {v.get("label", "") for v in fine_topics_data.values()}
+            if selected == "All topics":
+                st.session_state.pop("sankey_filter", None)
+            else:
+                parts = selected.split(": ", 1)
+                level = parts[0]
+                label = parts[1].rsplit(" (", 1)[0]
+                st.session_state["sankey_filter"] = (level, label)
 
-                if clicked in macro_labels:
-                    level = "macro"
-                elif clicked in mid_labels:
-                    level = "mid"
-                elif clicked in fine_labels:
-                    level = "fine"
-                else:
-                    level = None
-
-                if level:
-                    current = st.session_state.get("sankey_filter")
-                    if current == (level, clicked):
-                        st.session_state.pop("sankey_filter", None)
-                    else:
-                        st.session_state["sankey_filter"] = (level, clicked)
-
-            st.caption("Click a node to filter the table. Hover to highlight connections.")
+            st.caption("Select a topic above to filter the table. Hover the diagram to explore connections.")
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
