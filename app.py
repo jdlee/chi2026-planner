@@ -574,9 +574,10 @@ def main():
     # Keep expander open if user has interacted with topic selection
     # --- Topic Hierarchy (ECharts Sankey via raw HTML) ---
     _hierarchy_open = "sankey_filter" in st.session_state
-    with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
+    with st.expander("Topic Hierarchy", expanded=True):
         if topics and hierarchy:
             import streamlit.components.v1 as components
+            st.caption(f"Rendering {len(hierarchy)} topics...")
 
             macro_topics_data = topics.get("macro", {})
             mid_topics_data = topics.get("mid", {})
