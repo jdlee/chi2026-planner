@@ -753,15 +753,31 @@ def main():
                 }],
             }
 
-            # Render ECharts Sankey via CDN (no streamlit-echarts dependency)
+            # Render ECharts Sankey via dynamic script loading
             option_json = _json.dumps(option)
             html = f"""
-            <div id="sankey" style="width:100%;height:780px"></div>
-            <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+            <div id="sankey" style="width:100%;height:780px;
+                 font-family:-apple-system,'Helvetica Neue',sans-serif">
+                <p style="color:#86868b;text-align:center;padding-top:20px">
+                    Loading diagram...</p>
+            </div>
             <script>
-                var chart = echarts.init(document.getElementById('sankey'));
-                chart.setOption({option_json});
-                window.addEventListener('resize', function() {{ chart.resize(); }});
+                (function() {{
+                    var s = document.createElement('script');
+                    s.src = 'https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js';
+                    s.onload = function() {{
+                        var el = document.getElementById('sankey');
+                        el.innerHTML = '';
+                        var chart = echarts.init(el);
+                        chart.setOption({option_json});
+                        window.addEventListener('resize', function() {{ chart.resize(); }});
+                    }};
+                    s.onerror = function() {{
+                        document.getElementById('sankey').innerHTML =
+                            '<p style="color:#cc0000;text-align:center">Failed to load diagram library</p>';
+                    }};
+                    document.head.appendChild(s);
+                }})();
             </script>
             """
             components.html(html, height=800, scrolling=False)
