@@ -574,10 +574,9 @@ def main():
     # Keep expander open if user has interacted with topic selection
     # --- Topic Hierarchy (ECharts Sankey via raw HTML) ---
     _hierarchy_open = "sankey_filter" in st.session_state
-    with st.expander("Topic Hierarchy", expanded=True):
+    with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
         if topics and hierarchy:
             import streamlit.components.v1 as components
-            st.caption(f"Rendering {len(hierarchy)} topics...")
 
             macro_topics_data = topics.get("macro", {})
             mid_topics_data = topics.get("mid", {})
@@ -754,31 +753,19 @@ def main():
                 }],
             }
 
-            # Render ECharts Sankey via dynamic script loading
+            # Load ECharts JS from bundled file (CDN blocked by Cloud CSP)
+            echarts_js_path = DATA_DIR / "echarts.min.js"
+            echarts_js = echarts_js_path.read_text() if echarts_js_path.exists() else ""
+
             option_json = _json.dumps(option)
             html = f"""
             <div id="sankey" style="width:100%;height:780px;
-                 font-family:-apple-system,'Helvetica Neue',sans-serif">
-                <p style="color:#86868b;text-align:center;padding-top:20px">
-                    Loading diagram...</p>
-            </div>
+                 font-family:-apple-system,'Helvetica Neue',sans-serif"></div>
+            <script>{echarts_js}</script>
             <script>
-                (function() {{
-                    var s = document.createElement('script');
-                    s.src = 'https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js';
-                    s.onload = function() {{
-                        var el = document.getElementById('sankey');
-                        el.innerHTML = '';
-                        var chart = echarts.init(el);
-                        chart.setOption({option_json});
-                        window.addEventListener('resize', function() {{ chart.resize(); }});
-                    }};
-                    s.onerror = function() {{
-                        document.getElementById('sankey').innerHTML =
-                            '<p style="color:#cc0000;text-align:center">Failed to load diagram library</p>';
-                    }};
-                    document.head.appendChild(s);
-                }})();
+                var chart = echarts.init(document.getElementById('sankey'));
+                chart.setOption({option_json});
+                window.addEventListener('resize', function() {{ chart.resize(); }});
             </script>
             """
             components.html(html, height=800, scrolling=False)
