@@ -698,32 +698,42 @@ def main():
 
     # --- Build filtered paper index set (used by Sankey and table) ---
     _filtered_indices = set(range(len(papers)))
-    if selected_slots and date_slots and set(selected_slots) != set(date_slots):
-        allowed_dates_am = set()
-        allowed_dates_pm = set()
-        for slot in selected_slots:
-            parts = slot.rsplit(" ", 1)
-            period = parts[-1]
-            date_part = parts[0].split(" ", 1)[-1]
-            full_date = f"2026-{date_part}"
-            if period == "AM":
-                allowed_dates_am.add(full_date)
-            else:
-                allowed_dates_pm.add(full_date)
-        valid = set()
-        for idx, p in enumerate(papers):
-            sched = p.get("schedule", [])
-            entries = sched if sched else [p]
-            for s in entries:
-                d = s.get("date", p.get("date", ""))
-                st_time = s.get("start_time", p.get("start_time", "12:00"))
-                if (st_time < "12:00" and d in allowed_dates_am) or \
-                   (st_time >= "12:00" and d in allowed_dates_pm):
-                    valid.add(idx)
-                    break
-        _filtered_indices &= valid
-    if selected_types:
-        _filtered_indices &= {i for i, p in enumerate(papers) if p.get("session_type") in selected_types}
+
+    # Schedule filter: if any slots exist but none selected → empty set
+    if date_slots:
+        if not selected_slots:
+            _filtered_indices = set()
+        elif set(selected_slots) != set(date_slots):
+            allowed_dates_am = set()
+            allowed_dates_pm = set()
+            for slot in selected_slots:
+                parts = slot.rsplit(" ", 1)
+                period = parts[-1]
+                date_part = parts[0].split(" ", 1)[-1]
+                full_date = f"2026-{date_part}"
+                if period == "AM":
+                    allowed_dates_am.add(full_date)
+                else:
+                    allowed_dates_pm.add(full_date)
+            valid = set()
+            for idx, p in enumerate(papers):
+                sched = p.get("schedule", [])
+                entries = sched if sched else [p]
+                for s in entries:
+                    d = s.get("date", p.get("date", ""))
+                    st_time = s.get("start_time", p.get("start_time", "12:00"))
+                    if (st_time < "12:00" and d in allowed_dates_am) or \
+                       (st_time >= "12:00" and d in allowed_dates_pm):
+                        valid.add(idx)
+                        break
+            _filtered_indices &= valid
+
+    # Type filter: if types exist but none selected → empty set
+    if session_types:
+        if not selected_types:
+            _filtered_indices = set()
+        else:
+            _filtered_indices &= {i for i, p in enumerate(papers) if p.get("session_type") in selected_types}
 
     # --- Topic Hierarchy (SVG Sankey + selectbox filter) ---
     _hierarchy_open = "sankey_filter" in st.session_state
