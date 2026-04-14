@@ -12,6 +12,13 @@ from export import generate_ics, generate_markdown
 ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
 
+# Custom Sankey component (must be declared at module level)
+import streamlit.components.v1 as _components
+_sankey_component = _components.declare_component(
+    "sankey_selector",
+    path=str(ROOT / "components" / "sankey"),
+)
+
 MACRO_COLORS = [
     "rgba(232,213,183,0.8)", "rgba(183,213,232,0.8)", "rgba(213,232,183,0.8)",
     "rgba(232,183,213,0.8)", "rgba(183,232,213,0.8)", "rgba(232,201,183,0.8)",
@@ -739,11 +746,7 @@ def main():
     _hierarchy_open = "sankey_filter" in st.session_state
     with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
         if topics and hierarchy:
-            import streamlit.components.v1 as components
-            _sankey_component = components.declare_component(
-                "sankey_selector",
-                path=str(ROOT / "components" / "sankey"),
-            )
+            pass  # _sankey_component declared at module level
 
             active_filter = st.session_state.get("sankey_filter")
             macro_topics_data = topics.get("macro", {})
