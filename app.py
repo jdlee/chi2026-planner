@@ -572,65 +572,150 @@ def main():
 
     # --- Topic Hierarchy (clickable text chart) ---
     # Keep expander open if user has interacted with topic selection
-    # --- Topic Hierarchy (ECharts Sankey via raw HTML) ---
+    # --- Topic Hierarchy (SVG Sankey + selectbox filter) ---
     _hierarchy_open = "sankey_filter" in st.session_state
     with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
         if topics and hierarchy:
             import streamlit.components.v1 as components
 
+            active_filter = st.session_state.get("sankey_filter")
             macro_topics_data = topics.get("macro", {})
             mid_topics_data = topics.get("mid", {})
             fine_topics_data = topics.get("fine", {})
 
-            active_filter = st.session_state.get("sankey_filter")
+            # Use pre-computed layout data
+            nodes_df, links_df = build_hierarchy_chart_data(topics, hierarchy)
 
-            # Build parent maps
-            mid_to_macro_id = {}
-            fine_to_mid_id = {}
-            for fid, h in hierarchy.items():
-                mid_to_macro_id[str(h["mid"])] = str(h["macro"])
-                fine_to_mid_id[fid] = str(h["mid"])
-
-            # Compute which labels are highlighted
-            highlighted_labels = set()
+            # Compute highlighted labels
+            highlighted = set()
             if active_filter:
                 al, ab = active_filter
-                if al == "macro":
-                    highlighted_labels.add(ab)
-                    for mid_id, macro_id in mid_to_macro_id.items():
-                        if macro_topics_data.get(macro_id, {}).get("label") == ab:
-                            highlighted_labels.add(mid_topics_data.get(mid_id, {}).get("label", ""))
-                            for fid, h in hierarchy.items():
-                                if str(h["mid"]) == mid_id:
-                                    highlighted_labels.add(fine_topics_data.get(fid, {}).get("label", ""))
-                elif al == "mid":
-                    highlighted_labels.add(ab)
-                    # Parent macro
-                    for mid_id, macro_id in mid_to_macro_id.items():
-                        if mid_topics_data.get(mid_id, {}).get("label") == ab:
-                            highlighted_labels.add(macro_topics_data.get(macro_id, {}).get("label", ""))
-                            # Child fines
-                            for fid, h in hierarchy.items():
-                                if str(h["mid"]) == mid_id:
-                                    highlighted_labels.add(fine_topics_data.get(fid, {}).get("label", ""))
-                            break
-                elif al == "fine":
-                    highlighted_labels.add(ab)
-                    for fid, h in hierarchy.items():
-                        if fine_topics_data.get(fid, {}).get("label") == ab:
-                            mid_id = str(h["mid"])
-                            macro_id = str(h["macro"])
-                            highlighted_labels.add(mid_topics_data.get(mid_id, {}).get("label", ""))
-                            highlighted_labels.add(macro_topics_data.get(macro_id, {}).get("label", ""))
-                            break
+                for _, r in nodes_df.iterrows():
+                    if al == "macro" and r["parent_macro"] == ab:
+                        highlighted.add(r["label"])
+                    elif al == "mid":
+                        if r["parent_mid"] == ab or (r["level"] == "macro" and r["label"] in
+                            nodes_df.loc[(nodes_df["level"] == "mid") & (nodes_df["label"] == ab), "parent_macro"].values):
+                            highlighted.add(r["label"])
+                    elif al == "fine":
+                        fr = nodes_df.loc[(nodes_df["level"] == "fine") & (nodes_df["label"] == ab)]
+                        if len(fr):
+                            pm, pma = fr.iloc[0]["parent_mid"], fr.iloc[0]["parent_macro"]
+                            if r["label"] in (ab, pm, pma):
+                                highlighted.add(r["label"])
 
-            # Sorted macro order (descending count)
+            # SVG dimensions
+            W, H = 960, 800
+            node_w = 12
+            margin_l, margin_r = 160, 160  # space for labels
+            plot_w = W - margin_l - margin_r
+            y_max = nodes_df["y2"].max()
+            if y_max == 0:
+                y_max = 1
+
+            # X positions for 3 columns
+            col_x = {0: margin_l, 1: margin_l + plot_w * 0.42, 2: margin_l + plot_w * 0.84}
+            x_map = {"macro": 0, "mid": 1, "fine": 2}
+
+            def _darken(rgba_str):
+                p = rgba_str.replace("rgba(", "").replace(")", "").split(",")
+                return f"rgb({max(0,int(p[0].strip())-80)},{max(0,int(p[1].strip())-80)},{max(0,int(p[2].strip())-80)})"
+
+            # Build SVG
+            svg_parts = [f'<svg width="{W}" height="{H}" xmlns="http://www.w3.org/2000/svg" '
+                         f'style="font-family:-apple-system,Helvetica Neue,sans-serif">']
+
+            # Column headers
+            for label, ci in [("Macro", 0), ("Mid", 1), ("Micro", 2)]:
+                x = col_x[ci] + node_w / 2
+                svg_parts.append(
+                    f'<text x="{x}" y="16" text-anchor="middle" '
+                    f'font-size="12" font-weight="600" fill="#86868b">{label}</text>'
+                )
+
+            y_offset = 28  # below headers
+
+            # Draw links first (behind nodes)
+            for _, lk in links_df.iterrows():
+                src_col = 0 if lk["src_x"] < 0.5 else 1
+                tgt_col = 1 if lk["tgt_x"] < 1.5 else 2
+                x1 = col_x[src_col] + node_w
+                x2 = col_x[tgt_col]
+                sy0 = y_offset + (lk["src_y"] / y_max) * (H - y_offset - 10)
+                sy1 = y_offset + (lk["src_y2"] / y_max) * (H - y_offset - 10)
+                ty0 = y_offset + (lk["tgt_y"] / y_max) * (H - y_offset - 10)
+                ty1 = y_offset + (lk["tgt_y2"] / y_max) * (H - y_offset - 10)
+                cx = (x1 + x2) / 2
+                color = lk["color"].replace("0.8)", "0.15)")
+                if active_filter:
+                    color = lk["color"].replace("0.8)", "0.25)") if not highlighted or True else lk["color"].replace("0.8)", "0.04)")
+                    # Check if both endpoints are highlighted
+                    # (simplified: just use low opacity for all, highlighted ones get more)
+                    color = lk["color"].replace("0.8)", "0.08)")
+                svg_parts.append(
+                    f'<path d="M{x1},{sy0} C{cx},{sy0} {cx},{ty0} {x2},{ty0} '
+                    f'L{x2},{ty1} C{cx},{ty1} {cx},{sy1} {x1},{sy1} Z" '
+                    f'fill="{color}" />'
+                )
+
+            # Draw nodes and labels
+            for _, nd in nodes_df.iterrows():
+                ci = x_map[nd["level"]]
+                x = col_x[ci]
+                y0 = y_offset + (nd["y"] / y_max) * (H - y_offset - 10)
+                y1 = y_offset + (nd["y2"] / y_max) * (H - y_offset - 10)
+                h = max(y1 - y0, 2)
+                color = nd["color"]
+                dark = _darken(color)
+                label = nd["label"]
+                count = nd["count"]
+                is_hl = not active_filter or label in highlighted
+
+                opacity = "1" if is_hl else "0.25"
+                text_fill = dark if is_hl else "#c0c0c0"
+                font_size = "10" if nd["level"] != "macro" else "11"
+                font_weight = "600" if is_hl else "400"
+
+                # Node rect
+                svg_parts.append(
+                    f'<rect x="{x}" y="{y0}" width="{node_w}" height="{h}" '
+                    f'rx="2" fill="{color}" opacity="{opacity}"/>'
+                )
+
+                # Label
+                mid_y = y0 + h / 2
+                if ci == 0:  # macro: label on left
+                    svg_parts.append(
+                        f'<text x="{x - 6}" y="{mid_y}" text-anchor="end" '
+                        f'dominant-baseline="central" font-size="{font_size}" '
+                        f'font-weight="{font_weight}" fill="{text_fill}">'
+                        f'{label} ({count})</text>'
+                    )
+                else:  # mid/fine: label on right
+                    svg_parts.append(
+                        f'<text x="{x + node_w + 6}" y="{mid_y}" text-anchor="start" '
+                        f'dominant-baseline="central" font-size="{font_size}" '
+                        f'font-weight="{font_weight}" fill="{text_fill}">'
+                        f'{label} ({count})</text>'
+                    )
+
+            svg_parts.append('</svg>')
+            svg_html = '\n'.join(svg_parts)
+
+            # Render as HTML component (pure SVG, no external JS)
+            components.html(
+                f'<div style="overflow-x:auto">{svg_html}</div>',
+                height=H + 20, scrolling=False,
+            )
+
+            # Filter selectbox
             macro_order = sorted(
                 [k for k in macro_topics_data if k != "-1"],
                 key=lambda k: macro_topics_data[k]["count"], reverse=True,
             )
-
-            # Build ordered mid/fine lists grouped by macro
+            mid_to_macro_id = {}
+            for fid, h in hierarchy.items():
+                mid_to_macro_id[str(h["mid"])] = str(h["macro"])
             mid_order = []
             for macro_id in macro_order:
                 mid_order.extend(sorted(
@@ -644,133 +729,6 @@ def main():
                     key=lambda f: fine_topics_data.get(f, {}).get("count", 0), reverse=True,
                 ))
 
-            DIM = "#e0e0e0"
-
-            # Build Sankey nodes in sorted order
-            sankey_nodes = []
-            for macro_id in macro_order:
-                v = macro_topics_data[macro_id]
-                color = MACRO_COLORS[int(macro_id) % len(MACRO_COLORS)]
-                hl = not active_filter or v["label"] in highlighted_labels
-                sankey_nodes.append({
-                    "name": v["label"],
-                    "itemStyle": {
-                        "color": color if hl else DIM,
-                        "borderColor": color if hl else DIM,
-                        "opacity": 1.0 if hl else 0.3,
-                    },
-                    "label": {"color": "#1d1d1f" if hl else "#ccc"},
-                    "depth": 0,
-                })
-
-            for mid_id in mid_order:
-                v = mid_topics_data.get(mid_id, {})
-                macro_id = mid_to_macro_id.get(mid_id, "0")
-                color = MACRO_COLORS[int(macro_id) % len(MACRO_COLORS)]
-                label = v.get("label", "")
-                hl = not active_filter or label in highlighted_labels
-                sankey_nodes.append({
-                    "name": label,
-                    "itemStyle": {
-                        "color": color if hl else DIM,
-                        "borderColor": color if hl else DIM,
-                        "opacity": 1.0 if hl else 0.3,
-                    },
-                    "label": {"color": "#1d1d1f" if hl else "#ccc"},
-                    "depth": 1,
-                })
-
-            for fine_id in fine_order:
-                v = fine_topics_data.get(fine_id, {})
-                macro_id = str(hierarchy.get(fine_id, {}).get("macro", 0))
-                color = MACRO_COLORS[int(macro_id) % len(MACRO_COLORS)]
-                label = v.get("label", "")
-                hl = not active_filter or label in highlighted_labels
-                sankey_nodes.append({
-                    "name": label,
-                    "itemStyle": {
-                        "color": color if hl else DIM,
-                        "borderColor": color if hl else DIM,
-                        "opacity": 1.0 if hl else 0.3,
-                    },
-                    "label": {"color": "#1d1d1f" if hl else "#ccc"},
-                    "depth": 2,
-                })
-
-            # Links: macro → mid (aggregate fine counts)
-            sankey_links = []
-            mid_agg = {}
-            for fid, h in hierarchy.items():
-                macro_id = str(h["macro"])
-                mid_id = str(h["mid"])
-                cnt = fine_topics_data.get(fid, {}).get("count", 0)
-                key = (macro_id, mid_id)
-                mid_agg[key] = mid_agg.get(key, 0) + cnt
-
-            for (macro_id, mid_id), cnt in mid_agg.items():
-                src = macro_topics_data.get(macro_id, {}).get("label", "")
-                tgt = mid_topics_data.get(mid_id, {}).get("label", "")
-                if src and tgt and cnt > 0:
-                    hl = not active_filter or (src in highlighted_labels and tgt in highlighted_labels)
-                    sankey_links.append({
-                        "source": src, "target": tgt, "value": cnt,
-                        "lineStyle": {"opacity": 0.35 if hl else 0.05},
-                    })
-
-            # Links: mid → fine
-            for fid in fine_order:
-                h = hierarchy[fid]
-                mid_id = str(h["mid"])
-                cnt = fine_topics_data.get(fid, {}).get("count", 0)
-                src = mid_topics_data.get(mid_id, {}).get("label", "")
-                tgt = fine_topics_data.get(fid, {}).get("label", "")
-                if src and tgt and cnt > 0:
-                    hl = not active_filter or (src in highlighted_labels and tgt in highlighted_labels)
-                    sankey_links.append({
-                        "source": src, "target": tgt, "value": cnt,
-                        "lineStyle": {"opacity": 0.35 if hl else 0.05},
-                    })
-
-            import json as _json
-            option = {
-                "tooltip": {"trigger": "item", "triggerOn": "mousemove"},
-                "series": [{
-                    "type": "sankey",
-                    "emphasis": {"focus": "adjacency"},
-                    "nodeAlign": "justify",
-                    "orient": "horizontal",
-                    "nodeGap": 4,
-                    "nodeWidth": 14,
-                    "layoutIterations": 32,
-                    "label": {
-                        "show": True,
-                        "fontSize": 10,
-                        "fontFamily": "-apple-system, 'Helvetica Neue', sans-serif",
-                    },
-                    "lineStyle": {"color": "source"},
-                    "data": sankey_nodes,
-                    "links": sankey_links,
-                }],
-            }
-
-            # Load ECharts JS from bundled file (CDN blocked by Cloud CSP)
-            echarts_js_path = DATA_DIR / "echarts.min.js"
-            echarts_js = echarts_js_path.read_text() if echarts_js_path.exists() else ""
-
-            option_json = _json.dumps(option)
-            html = f"""
-            <div id="sankey" style="width:100%;height:780px;
-                 font-family:-apple-system,'Helvetica Neue',sans-serif"></div>
-            <script>{echarts_js}</script>
-            <script>
-                var chart = echarts.init(document.getElementById('sankey'));
-                chart.setOption({option_json});
-                window.addEventListener('resize', function() {{ chart.resize(); }});
-            </script>
-            """
-            components.html(html, height=800, scrolling=False)
-
-            # Filter selection via selectbox (reliable, no rerun loops)
             all_topics = []
             for k in macro_order:
                 v = macro_topics_data[k]
@@ -807,7 +765,7 @@ def main():
                 label = parts[1].rsplit(" (", 1)[0]
                 st.session_state["sankey_filter"] = (level, label)
 
-            st.caption("Select a topic above to filter the table. Hover the diagram to explore connections.")
+            st.caption("Select a topic to filter. The diagram highlights related topics.")
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
