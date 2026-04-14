@@ -570,8 +570,161 @@ def main():
     themes = [{"name": t} for t in topic_names]
     min_relevance = 0.2
 
-    # --- Topic Hierarchy (clickable text chart) ---
-    # Keep expander open if user has interacted with topic selection
+    # --- Sidebar (before Sankey so filter state is available) ---
+    with st.sidebar:
+        from datetime import date as dt_date
+        day_names = {0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu", 4: "Fri", 5: "Sat", 6: "Sun"}
+        dates = sorted(set(p.get("date", "") for p in papers if p.get("date")))
+        day_info = []
+        for d in dates:
+            try:
+                parts = d.split("-")
+                dow = dt_date(int(parts[0]), int(parts[1]), int(parts[2])).weekday()
+                day_abbr = day_names[dow]
+                day_num = parts[2]
+            except Exception:
+                day_abbr = "?"
+                day_num = d[-2:]
+            day_info.append({"date": d, "abbr": day_abbr, "num": day_num})
+
+        date_slots = []
+        selected_slots = []
+
+        if day_info:
+            st.markdown('<p class="sidebar-label">Schedule</p>', unsafe_allow_html=True)
+            cols = st.columns(len(day_info))
+            for i, d in enumerate(day_info):
+                with cols[i]:
+                    st.markdown(
+                        f'<div class="day-col">'
+                        f'<span class="day-abbr">{d["abbr"]}</span><br>'
+                        f'<span class="day-num">{d["num"]}</span></div>',
+                        unsafe_allow_html=True,
+                    )
+            cols_am = st.columns(len(day_info))
+            for i, d in enumerate(day_info):
+                slot_key = f"{d['abbr']} {d['date'][5:]} AM"
+                date_slots.append(slot_key)
+                with cols_am[i]:
+                    if st.checkbox("am", value=True, key=f"sched_am_{d['date']}", label_visibility="collapsed"):
+                        selected_slots.append(slot_key)
+                    st.markdown('<div class="slot-label">AM</div>', unsafe_allow_html=True)
+            cols_pm = st.columns(len(day_info))
+            for i, d in enumerate(day_info):
+                slot_key = f"{d['abbr']} {d['date'][5:]} PM"
+                date_slots.append(slot_key)
+                with cols_pm[i]:
+                    if st.checkbox("pm", value=True, key=f"sched_pm_{d['date']}", label_visibility="collapsed"):
+                        selected_slots.append(slot_key)
+                    st.markdown('<div class="slot-label">PM</div>', unsafe_allow_html=True)
+
+        type_display_names = {
+            "Interactive Demos": "Demos",
+            "Plenary And Keynote": "Plenary",
+            "Student Mentoring Program": "Student Mentoring",
+            "SIGCHI Awards": "Awards",
+        }
+        session_types = sorted(set(p.get("session_type", "") for p in papers if p.get("session_type")))
+        selected_types = []
+        if session_types:
+            st.markdown('<p class="sidebar-label">Type</p>', unsafe_allow_html=True)
+            n_cols = 2
+            type_cols = st.columns(n_cols)
+            for i, stype in enumerate(session_types):
+                display_name = type_display_names.get(stype, stype)
+                with type_cols[i % n_cols]:
+                    if st.checkbox(display_name, value=True, key=f"type_{stype}"):
+                        selected_types.append(stype)
+
+        st.divider()
+        n_selected = len(st.session_state.selected)
+        st.markdown(
+            f'<p class="sidebar-label">Selected &nbsp;·&nbsp; {n_selected}</p>',
+            unsafe_allow_html=True,
+        )
+        if day_info:
+            sel_counts = {}
+            for idx in st.session_state.selected:
+                if idx < len(papers):
+                    p = papers[idx]
+                    sched = p.get("schedule", [])
+                    entries = sched if sched else [p]
+                    for s in entries:
+                        d = s.get("date", p.get("date", ""))
+                        st_time = s.get("start_time", p.get("start_time", "12:00"))
+                        period = "AM" if st_time < "12:00" else "PM"
+                        sel_counts[(d, period)] = sel_counts.get((d, period), 0) + 1
+            sel_cols_am = st.columns(len(day_info))
+            for i, d in enumerate(day_info):
+                with sel_cols_am[i]:
+                    count = sel_counts.get((d["date"], "AM"), 0)
+                    cls = "has-items" if count else "empty"
+                    st.markdown(f'<div class="sel-count {cls}">{count}</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="sel-slot-label">AM</div>', unsafe_allow_html=True)
+            sel_cols_pm = st.columns(len(day_info))
+            for i, d in enumerate(day_info):
+                with sel_cols_pm[i]:
+                    count = sel_counts.get((d["date"], "PM"), 0)
+                    cls = "has-items" if count else "empty"
+                    st.markdown(f'<div class="sel-count {cls}">{count}</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="sel-slot-label">PM</div>', unsafe_allow_html=True)
+
+        col_save, col_clear = st.columns(2)
+        with col_save:
+            if st.button("Save", use_container_width=True):
+                save_selection()
+                st.success("Saved!")
+        with col_clear:
+            if st.button("Clear", use_container_width=True, disabled=n_selected == 0):
+                st.session_state.selected = set()
+                save_selection()
+                st.rerun()
+
+        st.divider()
+        st.markdown('<p class="sidebar-label">Export</p>', unsafe_allow_html=True)
+        selected_papers = [p for i, p in enumerate(papers) if i in st.session_state.selected]
+        st.download_button(
+            "Markdown agenda",
+            data=generate_markdown(selected_papers, themes, min_relevance),
+            file_name="chi2026_agenda.md", mime="text/markdown",
+            disabled=len(selected_papers) == 0, use_container_width=True,
+        )
+        st.download_button(
+            "Calendar (.ics)",
+            data=generate_ics(selected_papers, themes, min_relevance),
+            file_name="chi2026_agenda.ics", mime="text/calendar",
+            disabled=len(selected_papers) == 0, use_container_width=True,
+        )
+
+    # --- Build filtered paper index set (used by Sankey and table) ---
+    _filtered_indices = set(range(len(papers)))
+    if selected_slots and date_slots and set(selected_slots) != set(date_slots):
+        allowed_dates_am = set()
+        allowed_dates_pm = set()
+        for slot in selected_slots:
+            parts = slot.rsplit(" ", 1)
+            period = parts[-1]
+            date_part = parts[0].split(" ", 1)[-1]
+            full_date = f"2026-{date_part}"
+            if period == "AM":
+                allowed_dates_am.add(full_date)
+            else:
+                allowed_dates_pm.add(full_date)
+        valid = set()
+        for idx, p in enumerate(papers):
+            sched = p.get("schedule", [])
+            entries = sched if sched else [p]
+            for s in entries:
+                d = s.get("date", p.get("date", ""))
+                st_time = s.get("start_time", p.get("start_time", "12:00"))
+                if (st_time < "12:00" and d in allowed_dates_am) or \
+                   (st_time >= "12:00" and d in allowed_dates_pm):
+                    valid.add(idx)
+                    break
+        _filtered_indices &= valid
+    if selected_types:
+        _filtered_indices &= {i for i, p in enumerate(papers) if p.get("session_type") in selected_types}
+
     # --- Topic Hierarchy (SVG Sankey + selectbox filter) ---
     _hierarchy_open = "sankey_filter" in st.session_state
     with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
@@ -582,6 +735,23 @@ def main():
             macro_topics_data = topics.get("macro", {})
             mid_topics_data = topics.get("mid", {})
             fine_topics_data = topics.get("fine", {})
+
+            # Recount topic sizes from filtered papers
+            filtered_papers = [papers[i] for i in sorted(_filtered_indices)]
+            _f_fine_counts = {}
+            for p in filtered_papers:
+                fid = str(p.get("cluster", -1))
+                _f_fine_counts[fid] = _f_fine_counts.get(fid, 0) + 1
+
+            # Rebuild topic counts for Sankey from filtered set
+            _f_mid_counts = {}
+            _f_macro_counts = {}
+            for fid, cnt in _f_fine_counts.items():
+                h = hierarchy.get(fid, {})
+                mid_id = str(h.get("mid", ""))
+                macro_id = str(h.get("macro", ""))
+                _f_mid_counts[mid_id] = _f_mid_counts.get(mid_id, 0) + cnt
+                _f_macro_counts[macro_id] = _f_macro_counts.get(macro_id, 0) + cnt
 
             # Use pre-computed layout data
             nodes_df, links_df = build_hierarchy_chart_data(topics, hierarchy)
@@ -668,7 +838,14 @@ def main():
                 color = nd["color"]
                 dark = _darken(color)
                 label = nd["label"]
-                count = nd["count"]
+                node_id = nd["id"]
+                # Use filtered count if sidebar filters are active
+                if nd["level"] == "macro":
+                    count = _f_macro_counts.get(node_id, 0)
+                elif nd["level"] == "mid":
+                    count = _f_mid_counts.get(node_id, 0)
+                else:
+                    count = _f_fine_counts.get(node_id, 0)
                 is_hl = not active_filter or label in highlighted
 
                 opacity = "1" if is_hl else "0.25"
@@ -769,187 +946,10 @@ def main():
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
-    # --- Sidebar ---
-    with st.sidebar:
-        # --- Schedule grid ---
-        from datetime import date as dt_date
-        day_names = {0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu", 4: "Fri", 5: "Sat", 6: "Sun"}
-        dates = sorted(set(p.get("date", "") for p in papers if p.get("date")))
-        day_info = []
-        for d in dates:
-            try:
-                parts = d.split("-")
-                dow = dt_date(int(parts[0]), int(parts[1]), int(parts[2])).weekday()
-                day_abbr = day_names[dow]
-                day_num = parts[2]
-            except Exception:
-                day_abbr = "?"
-                day_num = d[-2:]
-            day_info.append({"date": d, "abbr": day_abbr, "num": day_num})
-
-        date_slots = []
-        selected_slots = []
-
-        if day_info:
-            st.markdown('<p class="sidebar-label">Schedule</p>', unsafe_allow_html=True)
-
-            cols = st.columns(len(day_info))
-            for i, d in enumerate(day_info):
-                with cols[i]:
-                    st.markdown(
-                        f'<div class="day-col">'
-                        f'<span class="day-abbr">{d["abbr"]}</span><br>'
-                        f'<span class="day-num">{d["num"]}</span></div>',
-                        unsafe_allow_html=True,
-                    )
-
-            cols_am = st.columns(len(day_info))
-            for i, d in enumerate(day_info):
-                slot_key = f"{d['abbr']} {d['date'][5:]} AM"
-                date_slots.append(slot_key)
-                with cols_am[i]:
-                    if st.checkbox("am", value=True, key=f"sched_am_{d['date']}", label_visibility="collapsed"):
-                        selected_slots.append(slot_key)
-                    st.markdown('<div class="slot-label">AM</div>', unsafe_allow_html=True)
-
-            cols_pm = st.columns(len(day_info))
-            for i, d in enumerate(day_info):
-                slot_key = f"{d['abbr']} {d['date'][5:]} PM"
-                date_slots.append(slot_key)
-                with cols_pm[i]:
-                    if st.checkbox("pm", value=True, key=f"sched_pm_{d['date']}", label_visibility="collapsed"):
-                        selected_slots.append(slot_key)
-                    st.markdown('<div class="slot-label">PM</div>', unsafe_allow_html=True)
-
-        # --- Type toggles ---
-        type_display_names = {
-            "Interactive Demos": "Demos",
-            "Plenary And Keynote": "Plenary",
-            "Student Mentoring Program": "Student Mentoring",
-            "SIGCHI Awards": "Awards",
-        }
-        session_types = sorted(set(p.get("session_type", "") for p in papers if p.get("session_type")))
-        selected_types = []
-        if session_types:
-            st.markdown('<p class="sidebar-label">Type</p>', unsafe_allow_html=True)
-            n_cols = 2
-            type_cols = st.columns(n_cols)
-            for i, stype in enumerate(session_types):
-                display_name = type_display_names.get(stype, stype)
-                with type_cols[i % n_cols]:
-                    if st.checkbox(display_name, value=True, key=f"type_{stype}"):
-                        selected_types.append(stype)
-
-        st.divider()
-        n_selected = len(st.session_state.selected)
-        st.markdown(
-            f'<p class="sidebar-label">Selected &nbsp;·&nbsp; {n_selected}</p>',
-            unsafe_allow_html=True,
-        )
-
-        # Show selected paper counts per schedule slot
-        if day_info:
-            sel_counts = {}
-            for idx in st.session_state.selected:
-                if idx < len(papers):
-                    p = papers[idx]
-                    sched = p.get("schedule", [])
-                    entries = sched if sched else [p]
-                    for s in entries:
-                        d = s.get("date", p.get("date", ""))
-                        st_time = s.get("start_time", p.get("start_time", "12:00"))
-                        period = "AM" if st_time < "12:00" else "PM"
-                        sel_counts[(d, period)] = sel_counts.get((d, period), 0) + 1
-
-            sel_cols_am = st.columns(len(day_info))
-            for i, d in enumerate(day_info):
-                with sel_cols_am[i]:
-                    count = sel_counts.get((d["date"], "AM"), 0)
-                    cls = "has-items" if count else "empty"
-                    st.markdown(
-                        f'<div class="sel-count {cls}">{count}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown('<div class="sel-slot-label">AM</div>', unsafe_allow_html=True)
-
-            sel_cols_pm = st.columns(len(day_info))
-            for i, d in enumerate(day_info):
-                with sel_cols_pm[i]:
-                    count = sel_counts.get((d["date"], "PM"), 0)
-                    cls = "has-items" if count else "empty"
-                    st.markdown(
-                        f'<div class="sel-count {cls}">{count}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown('<div class="sel-slot-label">PM</div>', unsafe_allow_html=True)
-
-        col_save, col_clear = st.columns(2)
-        with col_save:
-            if st.button("Save", use_container_width=True):
-                save_selection()
-                st.success("Saved!")
-        with col_clear:
-            if st.button("Clear", use_container_width=True, disabled=n_selected == 0):
-                st.session_state.selected = set()
-                save_selection()
-                st.rerun()
-
-        st.divider()
-        st.markdown('<p class="sidebar-label">Export</p>', unsafe_allow_html=True)
-
-        selected_papers = [p for i, p in enumerate(papers) if i in st.session_state.selected]
-
-        st.download_button(
-            "Markdown agenda",
-            data=generate_markdown(selected_papers, themes, min_relevance),
-            file_name="chi2026_agenda.md",
-            mime="text/markdown",
-            disabled=len(selected_papers) == 0,
-            use_container_width=True,
-        )
-        st.download_button(
-            "Calendar (.ics)",
-            data=generate_ics(selected_papers, themes, min_relevance),
-            file_name="chi2026_agenda.ics",
-            mime="text/calendar",
-            disabled=len(selected_papers) == 0,
-            use_container_width=True,
-        )
-
     # --- Build and filter DataFrame ---
     df = build_dataframe(papers, topic_names)
     has_hierarchy = "macro_label" in df.columns
-
-    # Filter by date + AM/PM slot
-    if selected_slots and date_slots and set(selected_slots) != set(date_slots):
-        allowed_dates_am = set()
-        allowed_dates_pm = set()
-        for slot in selected_slots:
-            parts = slot.rsplit(" ", 1)
-            period = parts[-1]
-            date_part = parts[0].split(" ", 1)[-1]
-            full_date = f"2026-{date_part}"
-            if period == "AM":
-                allowed_dates_am.add(full_date)
-            else:
-                allowed_dates_pm.add(full_date)
-
-        # Pre-compute valid paper indices for slot filtering (avoids row-by-row apply)
-        valid_indices = set()
-        for idx, p in enumerate(papers):
-            sched = p.get("schedule", [])
-            entries = sched if sched else [p]
-            for s in entries:
-                d = s.get("date", p.get("date", ""))
-                st_time = s.get("start_time", p.get("start_time", "12:00"))
-                if (st_time < "12:00" and d in allowed_dates_am) or \
-                   (st_time >= "12:00" and d in allowed_dates_pm):
-                    valid_indices.add(idx)
-                    break
-        df = df[df["_index"].isin(valid_indices)]
-
-    if selected_types:
-        df = df[df["session_type"].isin(selected_types)]
+    df = df[df["_index"].isin(_filtered_indices)]
 
     # Apply topic filter from hierarchy chart click
     if "sankey_filter" in st.session_state:

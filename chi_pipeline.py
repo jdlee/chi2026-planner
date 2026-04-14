@@ -67,6 +67,10 @@ async def _scrape_day_page(page, date_str: str) -> list[dict]:
     logger.info(f"  {date_str}: found {len(timeslots)} timeslots")
 
     for timeslot in timeslots:
+        # Scroll timeslot into view to trigger lazy loading
+        await timeslot.scroll_into_view_if_needed()
+        await page.wait_for_timeout(2000)
+
         time_el = await timeslot.query_selector("h3.timeslot-time")
         time_text = (await time_el.inner_text()).strip() if time_el else ""
         slot_start, slot_end = _parse_time_range(time_text)
