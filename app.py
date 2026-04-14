@@ -735,11 +735,15 @@ def main():
         else:
             _filtered_indices &= {i for i, p in enumerate(papers) if p.get("session_type") in selected_types}
 
-    # --- Topic Hierarchy (SVG Sankey + selectbox filter) ---
+    # --- Topic Hierarchy (SVG Sankey, clickable via custom component) ---
     _hierarchy_open = "sankey_filter" in st.session_state
     with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
         if topics and hierarchy:
             import streamlit.components.v1 as components
+            _sankey_component = components.declare_component(
+                "sankey_selector",
+                path=str(ROOT / "components" / "sankey"),
+            )
 
             active_filter = st.session_state.get("sankey_filter")
             macro_topics_data = topics.get("macro", {})
@@ -863,96 +867,58 @@ def main():
                 font_size = "10" if nd["level"] != "macro" else "11"
                 font_weight = "600" if is_hl else "400"
 
-                # Node rect
+                level_attr = nd["level"]
+                esc_label = label.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
+
+                # Node rect (clickable)
                 svg_parts.append(
                     f'<rect x="{x}" y="{y0}" width="{node_w}" height="{h}" '
-                    f'rx="2" fill="{color}" opacity="{opacity}"/>'
+                    f'rx="2" fill="{color}" opacity="{opacity}" '
+                    f'data-level="{level_attr}" data-label="{esc_label}"/>'
                 )
 
-                # Label
+                # Label (clickable)
                 mid_y = y0 + h / 2
                 if ci == 0:  # macro: label on left
                     svg_parts.append(
                         f'<text x="{x - 6}" y="{mid_y}" text-anchor="end" '
                         f'dominant-baseline="central" font-size="{font_size}" '
-                        f'font-weight="{font_weight}" fill="{text_fill}">'
-                        f'{label} ({count})</text>'
+                        f'font-weight="{font_weight}" fill="{text_fill}" '
+                        f'data-level="{level_attr}" data-label="{esc_label}">'
+                        f'{esc_label} ({count})</text>'
                     )
                 else:  # mid/fine: label on right
                     svg_parts.append(
                         f'<text x="{x + node_w + 6}" y="{mid_y}" text-anchor="start" '
                         f'dominant-baseline="central" font-size="{font_size}" '
-                        f'font-weight="{font_weight}" fill="{text_fill}">'
-                        f'{label} ({count})</text>'
+                        f'font-weight="{font_weight}" fill="{text_fill}" '
+                        f'data-level="{level_attr}" data-label="{esc_label}">'
+                        f'{esc_label} ({count})</text>'
                     )
 
             svg_parts.append('</svg>')
             svg_html = '\n'.join(svg_parts)
 
-            # Render as HTML component (pure SVG, no external JS)
-            components.html(
-                f'<div style="overflow-x:auto">{svg_html}</div>',
-                height=H + 20, scrolling=False,
+            # Render via custom component (supports click → return value)
+            clicked = _sankey_component(
+                svg_content=svg_html, height=H + 20,
+                key="sankey_selector",
+                default=None,
             )
 
-            # Filter selectbox
-            macro_order = sorted(
-                [k for k in macro_topics_data if k != "-1"],
-                key=lambda k: macro_topics_data[k]["count"], reverse=True,
-            )
-            mid_to_macro_id = {}
-            for fid, h in hierarchy.items():
-                mid_to_macro_id[str(h["mid"])] = str(h["macro"])
-            mid_order = []
-            for macro_id in macro_order:
-                mid_order.extend(sorted(
-                    [m for m, p in mid_to_macro_id.items() if p == macro_id],
-                    key=lambda m: mid_topics_data.get(m, {}).get("count", 0), reverse=True,
-                ))
-            fine_order = []
-            for mid_id in mid_order:
-                fine_order.extend(sorted(
-                    [f for f, h in hierarchy.items() if str(h["mid"]) == mid_id],
-                    key=lambda f: fine_topics_data.get(f, {}).get("count", 0), reverse=True,
-                ))
+            # Process click from component
+            if clicked and isinstance(clicked, dict):
+                click_level = clicked.get("level")
+                click_label = clicked.get("label")
+                if click_level and click_label:
+                    current = st.session_state.get("sankey_filter")
+                    new_filter = (click_level, click_label)
+                    if current == new_filter:
+                        st.session_state.pop("sankey_filter", None)
+                    else:
+                        st.session_state["sankey_filter"] = new_filter
 
-            all_topics = []
-            for k in macro_order:
-                v = macro_topics_data[k]
-                all_topics.append(("macro", v["label"], v["count"]))
-            for mid_id in mid_order:
-                v = mid_topics_data.get(mid_id, {})
-                all_topics.append(("mid", v.get("label", ""), v.get("count", 0)))
-            for fine_id in fine_order:
-                v = fine_topics_data.get(fine_id, {})
-                all_topics.append(("fine", v.get("label", ""), v.get("count", 0)))
-
-            options = ["All topics"] + [
-                f"{lvl}: {lbl} ({cnt})" for lvl, lbl, cnt in all_topics
-            ]
-            current = st.session_state.get("sankey_filter")
-            current_idx = 0
-            if current:
-                target = f"{current[0]}: {current[1]}"
-                for i, opt in enumerate(options):
-                    if opt.startswith(target):
-                        current_idx = i
-                        break
-
-            selected = st.selectbox(
-                "Filter by topic", options, index=current_idx,
-                key="topic_filter_select", label_visibility="collapsed",
-            )
-
-            if selected == "All topics":
-                st.session_state.pop("sankey_filter", None)
-            else:
-                parts = selected.split(": ", 1)
-                level = parts[0]
-                label = parts[1].rsplit(" (", 1)[0]
-                st.session_state["sankey_filter"] = (level, label)
-
-            st.caption("Select a topic to filter. The diagram highlights related topics.")
+            st.caption("Click a node to filter the table.")
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 

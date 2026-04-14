@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { margin: 0; padding: 0; font-family: -apple-system, 'Helvetica Neue', sans-serif; overflow: hidden; }
+  svg text[data-level] { cursor: pointer; }
+  svg text[data-level]:hover { text-decoration: underline; }
+  svg rect[data-level] { cursor: pointer; }
+  svg rect[data-level]:hover { opacity: 0.8 !important; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+function sendValue(value) {
+  // Use Streamlit's component API if available
+  if (window.Streamlit) {
+    window.Streamlit.setComponentValue(value);
+  }
+}
+
+function setReady() {
+  if (window.Streamlit) {
+    window.Streamlit.setComponentReady();
+  }
+}
+
+function setHeight(h) {
+  if (window.Streamlit) {
+    window.Streamlit.setFrameHeight(h);
+  }
+}
+
+function onRender(event) {
+  if (!event || !event.detail || !event.detail.args) return;
+  var args = event.detail.args;
+  var root = document.getElementById("root");
+  root.innerHTML = args.svg_content || "";
+
+  // Click handlers on text and rect elements with data-level
+  var clickables = root.querySelectorAll("[data-level]");
+  for (var i = 0; i < clickables.length; i++) {
+    (function(el) {
+      el.addEventListener("click", function() {
+        sendValue({
+          level: el.getAttribute("data-level"),
+          label: el.getAttribute("data-label")
+        });
+      });
+    })(clickables[i]);
+  }
+
+  setHeight(args.height || 820);
+}
+
+// Listen for render events
+if (window.Streamlit) {
+  window.Streamlit.events.addEventListener(window.Streamlit.RENDER_EVENT, onRender);
+  setReady();
+} else {
+  // Fallback: poll for Streamlit to become available
+  var pollInterval = setInterval(function() {
+    if (window.Streamlit) {
+      clearInterval(pollInterval);
+      window.Streamlit.events.addEventListener(window.Streamlit.RENDER_EVENT, onRender);
+      setReady();
+    }
+  }, 50);
+}
+</script>
+</body>
+</html>
