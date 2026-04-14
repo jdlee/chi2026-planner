@@ -12,12 +12,6 @@ from export import generate_ics, generate_markdown
 ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
 
-# Custom Sankey component (must be declared at module level)
-import streamlit.components.v1 as _components
-_sankey_component = _components.declare_component(
-    "sankey_selector",
-    path=str(ROOT / "components" / "sankey"),
-)
 
 MACRO_COLORS = [
     "rgba(232,213,183,0.8)", "rgba(183,213,232,0.8)", "rgba(213,232,183,0.8)",
@@ -746,7 +740,7 @@ def main():
     _hierarchy_open = "sankey_filter" in st.session_state
     with st.expander("Topic Hierarchy", expanded=_hierarchy_open):
         if topics and hierarchy:
-            pass  # _sankey_component declared at module level
+            import streamlit.components.v1 as components
 
             active_filter = st.session_state.get("sankey_filter")
             macro_topics_data = topics.get("macro", {})
@@ -902,26 +896,39 @@ def main():
             svg_parts.append('</svg>')
             svg_html = '\n'.join(svg_parts)
 
-            # Render via custom component (supports click → return value)
-            clicked = _sankey_component(
-                svg_content=svg_html, height=H + 20,
-                key="sankey_selector",
-                default=None,
+            # Render static SVG
+            components.html(
+                f'<div style="overflow-x:auto">{svg_html}</div>',
+                height=H + 20, scrolling=False,
             )
 
-            # Process click from component
-            if clicked and isinstance(clicked, dict):
-                click_level = clicked.get("level")
-                click_label = clicked.get("label")
-                if click_level and click_label:
-                    current = st.session_state.get("sankey_filter")
-                    new_filter = (click_level, click_label)
-                    if current == new_filter:
-                        st.session_state.pop("sankey_filter", None)
-                    else:
-                        st.session_state["sankey_filter"] = new_filter
+            # Build topic list for selectbox
+            all_topics = (
+                [("macro", v["label"]) for k, v in macro_topics_data.items() if k != "-1"]
+                + [("mid", v.get("label", "")) for v in mid_topics_data.values() if v.get("label")]
+                + [("fine", v.get("label", "")) for v in fine_topics_data.values() if v.get("label")]
+            )
+            options = ["All topics"] + [f"{lvl}: {lbl}" for lvl, lbl in all_topics]
+            current = st.session_state.get("sankey_filter")
+            current_idx = 0
+            if current:
+                target = f"{current[0]}: {current[1]}"
+                for i, opt in enumerate(options):
+                    if opt == target:
+                        current_idx = i
+                        break
 
-            st.caption("Click a node to filter the table.")
+            selected = st.selectbox(
+                "Filter by topic", options, index=current_idx,
+                key="topic_filter_select", label_visibility="collapsed",
+            )
+            if selected == "All topics":
+                st.session_state.pop("sankey_filter", None)
+            else:
+                parts = selected.split(": ", 1)
+                st.session_state["sankey_filter"] = (parts[0], parts[1])
+
+            st.caption("Select a topic above to filter. Hover the diagram to explore.")
         else:
             st.info("No hierarchy data. Run `python chi_pipeline.py cluster` first.")
 
